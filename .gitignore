@@ -223,3 +223,6 @@ AMENT_IGNORE
 .ionide
 
 # End of https://www.toptal.com/developers/gitignore/api/ros2,visualstudiocode,python
+
+# Web Node.js modules
+web/node_modules/
