@@ -4,7 +4,7 @@ from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import BatteryState # 배터리 토픽 받는 msg 타입
 from nav2_msgs.action import NavigateToPose  # 액션 타입
-from rclpy.action import ActionClient  #낵션 서버에 goal를 보내는 클라 
+from rclpy.action import ActionClient  # 액션 서버에 goal를 보내는 클라 
 
 
 # BT 기본 클래스
@@ -62,7 +62,7 @@ class ConditionBatteryLow(BTNode):
             f"현재 배터리 검사: {blackboard['battery_level']}"
         )
 
-        if blackboard['battery_level'] <= 100:
+        if blackboard['battery_level'] <= 100:  # 임의로 100이하로 설정******
             return "SUCCESS"
         return "FAILURE"
 
