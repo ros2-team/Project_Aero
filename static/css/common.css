@@ -1,0 +1,23 @@
+/* 전체 공통 리셋 및 변수 설정 (팀원 모두가 따르는 규칙) */
+:root {
+    --airport-bg-color: #0a0f1d;
+    --airport-text-primary: #ffffff;
+    --airport-text-secondary: #a0aec0;
+    --airport-accent-cyan: #00e5ff;
+    --airport-btn-gradient: linear-gradient(135deg, #0055ff 0%, #00d2ff 100%);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+}
+
+body {
+    font-family: 'Noto Sans KR', sans-serif;
+    background-color: var(--airport-bg-color);
+    color: var(--airport-text-primary);
+    overflow: hidden;
+}

@@ -1,0 +1,20 @@
+# 파이썬 캐시 파일 (이거 올리면 지저분해짐)
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 파이썬 가상환경 폴더 (용량 폭탄의 주범, 절대 올리면 안 됨!)
+venv/
+.venv/
+env/
+
+# 환경 변수 및 보안 키 (API 키 등 유출 방지)
+.env
+
+# OS 기본 생성 쓰레기 파일
+.DS_Store
+Thumbs.db
+
+# IDE(에디터) 설정 파일
+.vscode/
+.idea/
