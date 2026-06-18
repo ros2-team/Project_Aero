@@ -2,6 +2,9 @@
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
+from sensor_msgs.msg import BatteryState # 배터리 토픽 받는 msg 타입
+from nav2_msgs.action import NavigateToPose  # 액션 타입
+from rclpy.action import ActionClient  #낵션 서버에 goal를 보내는 클라 
 
 
 # BT 기본 클래스
@@ -54,17 +57,39 @@ class Sequence(BTNode):
 # 1. Battery Branch (최우선 순위: 30% 이하 시 시스템 미작동)
 class ConditionBatteryLow(BTNode):
     def tick(self, blackboard, ros_node):
-        if blackboard['battery_level'] <= 30:
+
+        ros_node.get_logger().info(
+            f"현재 배터리 검사: {blackboard['battery_level']}"
+        )
+
+        if blackboard['battery_level'] <= 100:
             return "SUCCESS"
         return "FAILURE"
 
 class ActionSystemShutdown(BTNode):
+    
     def tick(self, blackboard, ros_node):
-        ros_node.get_logger().error(
-            f"[시스템 미작동] 배터리 부족 ({blackboard['battery_level']}%). 구동을 완전 중단합니다.",
-            throttle_duration_sec=3.0
-        )
-        ros_node.publish_velocity(0.0, 0.0)
+
+        ros_node.get_logger().warn(
+            f"charging_started = {blackboard['charging_started']}"
+        ) 
+
+        ros_node.get_logger().warn("배터리 브랜치 진입!")
+
+        if not blackboard['charging_started']:   
+            # 한 번만 goal 전송 why? tick 0.1초마다 도는데 goal 계쏙 보내면 정신나감
+
+            ros_node.get_logger().warn(
+                f"🔋 배터리 부족 ({blackboard['battery_level']}%)"
+            )
+
+            ros_node.send_nav_goal(   # 맵 기준 이 좌표로 가 
+                -0.07, 
+                -1.5
+            )
+
+            blackboard['charging_started'] = True
+
         return "RUNNING"
 
 
@@ -159,11 +184,24 @@ class AirportGuideBT(Node):
         
         self.cmd_vel_pub = self.create_publisher(Twist, "/cmd_vel", 10)
 
-    
-        # 블랙보드 데이터 세팅 (센서/상태 데이터 저장소)
+        self.create_subscription(
+            BatteryState,
+            '/battery_state',
+            self.battery_callback,
+            10
+        )
+
+        self.nav_client = ActionClient(
+            self,
+            NavigateToPose,
+            '/navigate_to_pose'
+        )
+
+     # 블랙보드 데이터 세팅 (센서/상태 데이터 저장소)
 
         self.blackboard = {
-            'battery_level': 100,         # 배터리 잔량 (%)
+            'battery_level': 100,         # 배터리 잔량 
+            'charging_started': False,    # 아직 충전소 goal 안보냄 
             
             'has_goal': True,             # 안내 목적지 존재 여부
             'goal_name': "Gate_A3",       # 목적지 명칭
@@ -221,6 +259,40 @@ class AirportGuideBT(Node):
 
         # 0.1초(10Hz) 주기 타이머 생성
         self.timer = self.create_timer(0.1, self.bt_tick)
+
+
+
+    def send_nav_goal(self, x, y):
+
+        self.get_logger().error(
+        f"★★★★ GOAL 함수 호출 ★★★★ ({x}, {y})"
+        )
+
+        goal_msg = NavigateToPose.Goal()
+
+        goal_msg.pose.header.frame_id = "map"
+        goal_msg.pose.header.stamp = self.get_clock().now().to_msg()
+
+        goal_msg.pose.pose.position.x = x
+        goal_msg.pose.pose.position.y = y
+
+        goal_msg.pose.pose.orientation.w = 1.0
+
+        self.nav_client.wait_for_server()
+
+        self.get_logger().info(
+            f"충전소 이동 시작 ({x}, {y})"
+        )
+
+        self.nav_client.send_goal_async(goal_msg)
+
+    
+    def battery_callback(self, msg):
+        self.blackboard['battery_level'] = msg.percentage   # 배터리 ㅍ센트 블랙보드에 저장  
+
+        self.get_logger().info(
+            f"Battery = {msg.percentage:.1f}%"
+        )
 
     def bt_tick(self):
         # 최상단 루프 노드 실행
