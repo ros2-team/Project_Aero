@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Destination</title>
+</head>
+<body>
+
+<h1>목적지를 선택하세요</h1>
+
+<button onclick="go('화장실')">
+    화장실
+</button>
+
+<button onclick="go('안내데스크')">
+    안내데스크
+</button>
+
+<button onclick="go('출국장')">
+    출국장
+</button>
+
+<script>
+
+function go(destination){
+
+    location.href =
+    "/navigation?destination="
+    + destination;
+
+}
+
+</script>
+
+</body>
+</html>
