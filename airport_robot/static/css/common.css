@@ -1,10 +1,20 @@
 /* 전체 공통 리셋 및 변수 설정 (팀원 모두가 따르는 규칙) */
 :root {
+    /* 색상 기본 토큰 */
     --airport-bg-color: #0a0f1d;
     --airport-text-primary: #ffffff;
     --airport-text-secondary: #a0aec0;
     --airport-accent-cyan: #00e5ff;
     --airport-btn-gradient: linear-gradient(135deg, #0055ff 0%, #00d2ff 100%);
+    
+    /* 추가 토큰 (통합 설계 시스템용) */
+    --airport-btn-secondary: #1e273e;
+    --airport-panel-bg: #161b2e;
+    --airport-border-light: rgba(255, 255, 255, 0.1);
+    --airport-border-lighter: rgba(255, 255, 255, 0.05);
+    --airport-success: #4caf50;
+    --airport-danger: #f44336;
+    --airport-info: #2196f3;
 }
 
 * {

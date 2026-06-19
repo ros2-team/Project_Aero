@@ -6,14 +6,14 @@
     height: 100vh;
     width: 100%;
     padding: 50px 40px;
-    background: radial-gradient(circle at 50% 30%, #162447 0%, var(--airport-bg-color) 80%);
+    background: linear-gradient(135deg, var(--airport-bg-color) 0%, #162447 50%);
 }
 
 .airport_home_header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 2px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 2px solid var(--airport-border-lighter);
     padding-bottom: 25px;
 }
 
@@ -21,7 +21,7 @@
 .airport_home_cyan_txt { color: var(--airport-accent-cyan); }
 
 .airport_home_clock {
-    font-family: 'Orbitron', sans-serif;
+    font-family: 'Noto Sans KR', sans-serif;
     font-size: 1.8rem;
     color: var(--airport-accent-cyan);
     font-weight: 500;
@@ -51,24 +51,27 @@
 .airport_home_prompt_sub { font-size: 1.6rem; color: var(--airport-text-secondary); }
 
 .airport_home_cta_btn {
-    width: 90%; max-width: 540px; height: 100px;
-    font-size: 2.2rem; font-weight: 700; color: #fff;
+    width: 90%; max-width: 580px; height: 120px;
+    font-size: 2.2rem; font-weight: 700; color: var(--airport-text-primary);
     background: var(--airport-btn-gradient);
     border: none; border-radius: 50px; cursor: pointer;
     display: flex; justify-content: center; align-items: center;
+    white-space: nowrap;
+    overflow: hidden;
+    padding: 0 40px;
     transition: transform 0.1s ease;
 }
 .airport_home_cta_btn:active { transform: scale(0.96); filter: brightness(0.9); }
 
 .airport_home_footer {
     display: flex; justify-content: space-between; align-items: center;
-    border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 30px;
+    border-top: 1px solid var(--airport-border-lighter); padding-top: 30px;
 }
 
 .airport_home_voice_btn {
     display: flex; align-items: center; gap: 12px;
     height: 65px; padding: 0 25px;
-    background-color: #1e273e; border: 1px solid rgba(255,255,255,0.1);
+    background-color: var(--airport-btn-secondary); border: 1px solid var(--airport-border-light);
     border-radius: 35px; color: var(--airport-text-secondary);
     font-size: 1.2rem; font-weight: 700; cursor: pointer;
 }
@@ -77,7 +80,7 @@
 .airport_home_lang_selector { display: flex; gap: 12px; }
 .airport_home_lang_btn {
     height: 65px; padding: 0 25px;
-    background-color: #161b2e; border: 1px solid rgba(255,255,255,0.05);
+    background-color: var(--airport-panel-bg); border: 1px solid var(--airport-border-lighter);
     border-radius: 15px; color: var(--airport-text-secondary);
     font-size: 1.2rem; font-weight: 700; cursor: pointer;
 }
