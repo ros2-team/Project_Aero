@@ -6,7 +6,6 @@ from sensor_msgs.msg import BatteryState # 배터리 토픽 받는 msg 타입
 from nav2_msgs.action import NavigateToPose  # 액션 타입
 from rclpy.action import ActionClient  # 액션 서버에 goal를 보내는 클라 
 
-
 # BT 기본 클래스
 class BTNode:
     def __init__(self, name):
@@ -37,7 +36,7 @@ class Selector(BTNode):
 
 
 # Sequence (순차 실행 노드: 자식이 전부 SUCCESS여야 다음으로 진행)
-class Sequence(BTNode):
+class Sequence(BTNode):  
     def __init__(self, name):
         super().__init__(name)
         self.children = []
@@ -62,7 +61,7 @@ class ConditionBatteryLow(BTNode):
             f"현재 배터리 검사: {blackboard['battery_level']}"
         )
 
-        if blackboard['battery_level'] <= 100:  # 임의로 100이하로 설정******
+        if blackboard['battery_level'] <= 100:  # 임의로 100%이하로 설정******
             return "SUCCESS"
         return "FAILURE"
 
@@ -84,6 +83,8 @@ class ActionSystemShutdown(BTNode):
             )
 
             ros_node.send_nav_goal(   # 맵 기준 이 좌표로 가 
+                # 근데 해보니까 바로 가는건 가깝다고 느껴서인지 잘안감
+                #그래서 다른 좌표 -> 배터리 충전 좌표로 하니 잘감 
                 -0.07, 
                 -1.5
             )
@@ -105,7 +106,6 @@ class ActionEmergencyStop(BTNode):
         ros_node.publish_velocity(0.0, 0.0)
         ros_node.get_logger().error("긴급 정지! 전방에 장애물 감지")
         return "RUNNING"
-
 
 
 # 3. Avoidance Branch (충돌 회피: 0.5m 초과 1.5m 이내 장애물 제어)
@@ -131,7 +131,6 @@ class ActionAvoidance(BTNode):
 
 
 # 4. Human Follow Check Branch (사람 추적: 2미터 밖에 있으면 대기 및 신호)
-
 class ConditionHumanFar(BTNode):
     def tick(self, blackboard, ros_node):
         if blackboard['human_tracked'] and blackboard['human_distance'] > 2.0:
