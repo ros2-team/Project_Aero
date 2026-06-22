@@ -1,4 +1,14 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request , jsonify
+import mysql.connector
+
+# 데이터베이스 연결
+def get_db_connection():
+    return mysql.connector.connect(
+        host = "localhost",
+        user = "projectAR",
+        password = "1234",
+        database = "projectAR"
+    )
 
 app = Flask(__name__)
 
@@ -37,15 +47,26 @@ def navigation():
 def finish():
     return render_template("finish.html")
 
-# QR 호출
+# QR 
 @app.route("/qrcall")
 def qrcall():
 
     location = request.args.get("location", "unknown")
+    
     return render_template(
         "qrcall.html",
         location=location
     )
+# QR 로봇 호출 api ?????????????
+@app.route("/qrcalling", methods = ["POST"])
+def qrcalling():
+    
+    data = request.get_json() # json -> dict
+    location = data["location"]
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
 
 if __name__ == "__main__":
     app.run(
