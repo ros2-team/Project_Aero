@@ -1,14 +1,9 @@
-from flask import Flask, render_template, request , jsonify
-import mysql.connector
+from flask import Flask
+from flask import render_template
+from flask import request
+from flask import jsonify
+from database.database import get_db_connection
 
-# 데이터베이스 연결
-def get_db_connection():
-    return mysql.connector.connect(
-        host = "localhost",
-        user = "projectAR",
-        password = "1234",
-        database = "projectAR"
-    )
 
 app = Flask(__name__)
 
@@ -57,16 +52,34 @@ def qrcall():
         "qrcall.html",
         location=location
     )
-# QR 로봇 호출 api ?????????????
-@app.route("/qrcalling", methods = ["POST"])
-def qrcalling():
-    
-    data = request.get_json() # json -> dict
-    location = data["location"]
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
+# QR 로봇 호출
+@app.route("/call_robot", methods = ["POST"])
+def call_robot():
+    try:
+        data = request.get_json()
+        location = data["location"]
 
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """ 
+            insert into call_history(location_code)
+            values(%s)
+            """, 
+            (location,)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            "success" : True
+        })
+    except Exception as e:
+        print(e)
+        return jsonify({
+            "success" : False
+        }), 500
 
 if __name__ == "__main__":
     app.run(
