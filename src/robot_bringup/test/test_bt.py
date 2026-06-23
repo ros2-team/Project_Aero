@@ -5,71 +5,85 @@ from rclpy.executors import MultiThreadedExecutor
 from geometry_msgs.msg import Twist
 from nav2_msgs.action import NavigateToPose  
 from rclpy.action import ActionClient  
+import time
 
 from battery_node import BatteryNode
 from blackboard import Blackboard
+from arrival_node import ArrivalNode
 
-# BT 기본 클래스
+# ==============================================================================
+# [CORE] 행동 트리 기저 클래스 정의
+# ==============================================================================
 class BTNode:
     def __init__(self, name):
         self.name = name
-
     def tick(self, blackboard, ros_node):
         raise NotImplementedError
 
-# Selector
 class Selector(BTNode):
     def __init__(self, name):
         super().__init__(name)
         self.children = []
-
     def add_child(self, child):
         self.children.append(child)
-
     def tick(self, blackboard, ros_node):  
+        # 자식 노드 중 하나라도 SUCCESS나 RUNNING을 반환하면 즉시 실행을 멈추고 그 상태를 부모에게 보고합니다.
         for child in self.children:  
             status = child.tick(blackboard, ros_node)
             if status != "FAILURE":  
                 return status  
         return "FAILURE"  
 
-# Sequence
 class Sequence(BTNode):  
     def __init__(self, name):
         super().__init__(name)
         self.children = []
-
     def add_child(self, child):
         self.children.append(child)
-
     def tick(self, blackboard, ros_node):
+        # 자식 노드가 차례대로 SUCCESS를 반환해야만 다음 자식으로 넘어갑니다.
         for child in self.children:  
             status = child.tick(blackboard, ros_node)
             if status != "SUCCESS":  
                 return status  
         return "SUCCESS"  
 
-# 1. Battery Branch
+# ==============================================================================
+# [BRANCH 0] Battery Low
+# ==============================================================================
 class ConditionBatteryLow(BTNode):
     def tick(self, blackboard, ros_node):
-        # 실전 구동 시에는 30 이하로 변경해야 다른 브랜치들이 작동합니다.
-        # 현재는 테스트를 위해 100 이하로 설정된 상태 확인 로그 제거/조정 가능
-        if blackboard.battery_level <= 100.0:  
+        if blackboard.battery_level <= 30.0:  
             return "SUCCESS"
         return "FAILURE"
 
 class ActionSystemShutdown(BTNode):
     def tick(self, blackboard, ros_node):
-        ros_node.get_logger().warn(f"배터리 브랜치 구동 중! 충전 플래그 상태 = {blackboard.charging_started}", throttle_duration_sec=3.0)
-
         if not blackboard.charging_started:   
-            ros_node.get_logger().warn(f"🔋 배터리 부족 상태 감지 ({blackboard.battery_level}%) -> 충전소 goal 전송")
+            ros_node.get_logger().error(f"🚨 배터리 부족 상태 감지 ({blackboard.battery_level}%) -> 충전소 이동")
             ros_node.send_nav_goal(-0.07, -0.5)
             blackboard.charging_started = True
-
         return "RUNNING"
 
-# 2. Emergency Branch
+# ==============================================================================
+# [BRANCH 1] Sensor Timeout
+# ==============================================================================
+class ConditionSensorTimeout(BTNode):
+    def tick(self, blackboard, ros_node):
+        current_time = time.time()
+        if (current_time - blackboard.last_sensor_time) > 1.0 or blackboard.sensor_timeout:
+            return "SUCCESS"
+        return "FAILURE"
+
+class ActionSensorEmergencyStop(BTNode):
+    def tick(self, blackboard, ros_node):
+        blackboard.nav_status = "STOPPED_BY_SENSOR_TIMEOUT"
+        ros_node.get_logger().error("⚠️ [CRITICAL] 센서 데이터 유실 감지! 시스템 정지 대기.", throttle_duration_sec=2.0)
+        return "RUNNING"
+
+# ==============================================================================
+# [BRANCH 2] Emergency Stop
+# ==============================================================================
 class ConditionEmergency(BTNode):
     def tick(self, blackboard, ros_node):
         if blackboard.obstacle_distance <= 0.5:
@@ -78,148 +92,186 @@ class ConditionEmergency(BTNode):
 
 class ActionEmergencyStop(BTNode):
     def tick(self, blackboard, ros_node):
-        ros_node.publish_velocity(0.0, 0.0)
-        ros_node.get_logger().error("긴급 정지! 전방에 장애물 감지", throttle_duration_sec=1.0)
+        blackboard.nav_status = "EMERGENCY_STOP"
+        ros_node.get_logger().error("🛑 긴급 정지 상태 활성화!", throttle_duration_sec=1.0)
         return "RUNNING"
 
-# 3. Avoidance Branch
-class ConditionObstacle(BTNode):
+# ==============================================================================
+# [BRANCH 3] Human Tracker Control
+# ==============================================================================
+class ConditionHumanLost(BTNode):
     def tick(self, blackboard, ros_node):
-        dist = blackboard.obstacle_distance
-        if 0.5 < dist <= 1.5:
+        if not blackboard.human_tracked and blackboard.human_lost_timer >= 5.0:
             return "SUCCESS"
         return "FAILURE"
 
-class ActionAvoidance(BTNode):
+class ActionSearchHuman(BTNode):
     def tick(self, blackboard, ros_node):
-        direction = blackboard.obstacle_direction
-        if direction == "LEFT":
-            ros_node.publish_velocity(0.05, -0.3)  
-        elif direction == "RIGHT":
-            ros_node.publish_velocity(0.05, 0.3)   
-        else:
-            ros_node.publish_velocity(0.03, 0.0)   
-        ros_node.get_logger().info("장애물 주행 회피 중", throttle_duration_sec=2.0)
+        blackboard.nav_status = "HUMAN_LOST"
+        ros_node.get_logger().error("❓ [안내 유실] 대상 재탐색 대기 모드.", throttle_duration_sec=3.0)
         return "RUNNING"
 
-# 4. Human Follow Check Branch
 class ConditionHumanFar(BTNode):
-    def tick(self, blackboard, ros_node):
+    def tick(self, blackboard, ros_node): 
         if blackboard.human_tracked and blackboard.human_distance > 2.0:
             return "SUCCESS"
         return "FAILURE"
 
 class ActionSignalToHuman(BTNode):
     def tick(self, blackboard, ros_node):
-        ros_node.get_logger().warn(
-            f"[안내 대기] 사람이 멀어졌습니다 (거리: {blackboard.human_distance}m). '이쪽으로 오세요' 신호 송신 중...",
-            throttle_duration_sec=3.0
-        )
-        ros_node.publish_velocity(0.0, 0.0)  
+        blackboard.nav_status = "WAITING_HUMAN"
+        ros_node.get_logger().warn(f"📢 [대기] 가이드 대상 거리 초과 ({blackboard.human_distance}m).", throttle_duration_sec=3.0)
         return "RUNNING"
 
-# 5. Arrival Branch
-class ConditionArrived(BTNode):
+# ==============================================================================
+# [BRANCH 4] Avoidance
+# ==============================================================================
+class ConditionObstacle(BTNode):
     def tick(self, blackboard, ros_node):
-        if blackboard.is_arrived:
+        if 0.5 < blackboard.obstacle_distance <= 1.5:
             return "SUCCESS"
         return "FAILURE"
 
-class ActionStopGuide(BTNode):
+class ActionAvoidance(BTNode):
     def tick(self, blackboard, ros_node):
-        ros_node.publish_velocity(0.0, 0.0)
-        ros_node.get_logger().info(f"목적지 [{blackboard.goal_name}] 도착 완료. 정지 후 다음 명령을 대기합니다.", throttle_duration_sec=5.0)
+        blackboard.nav_status = "LOCAL_AVOIDANCE"
+        ros_node.get_logger().info("🔄 회피 제어 모드 활성화", throttle_duration_sec=2.0)
         return "RUNNING"
 
-# 6. Navigation Branch
+# ==============================================================================
+# [BRANCH 5] Arrival (도착 및 정지 제어 브랜치)
+# ==============================================================================
+class ConditionArrived(BTNode):   
+    def tick(self, blackboard, ros_node):
+        # arrival_node가 목적지 0.2m 안으로 들어와서 플래그를 True로 켰는지 검사합니다.
+        if blackboard.is_arrived:
+            return "SUCCESS" # 도착했으므로 우측의 ActionStopGuide를 실행시킵니다.
+        return "FAILURE"     # 아직 주행 중이거나 대기가 끝나 리셋된 상태라면 실패를 뱉어 이 브랜치를 닫습니다.
+    
+class ActionStopGuide(BTNode):    
+    def tick(self, blackboard, ros_node):
+        # arrival_node가 5초를 다 세고 다음 목적지를 갱신하면서 플래그를 꺼줄 때까지 
+        # 매 틱(0.1초)마다 반복해서 바퀴에 정지 명령(0,0)
+        ros_node.publish_velocity(0.0, 0.0)
+        return "RUNNING"     
+        # 이 브랜치가 열려있는 동안(대기 5초 동안)은 트리의 아래 흐름(6번)으로 내려가지 못하게 묶어둡니다.
+    
+
+# ==============================================================================
+# [BRANCH 6] Navigation (새 목적지)
+# ==============================================================================
 class ConditionHasGoal(BTNode):
     def tick(self, blackboard, ros_node):
+        # 아직 리스트에 남은 경유지가 있거나 주행할 미션이 살아있는지 검사합니다.
         if blackboard.has_goal:
             return "SUCCESS"
-        return "FAILURE"
+        return "FAILURE" 
 
-class ActionMoveToGoal(BTNode):
+class ActionMoveToGoal(BTNode):     
     def tick(self, blackboard, ros_node):
-        ros_node.publish_velocity(0.15, 0.0)  
-        ros_node.get_logger().info(f"공항 안내 중 → 목적지: {blackboard.goal_name}", throttle_duration_sec=2.0)
+        # [방어막] 로봇이 이미 새 좌표를 받고 굴러가고 있는 주행 상태("EXECUTING")인가?
+        if blackboard.nav_status == "EXECUTING":
+            # 이미 가고 있다면 중복으로 목표 전송을 하지 않도록 즉시 SUCCESS를 반환하여 안전하게 통과합니다.
+            return "SUCCESS"
+
+        # 💡 [핵심 해답] 위 방어막(EXECUTING)을 통과했다는 것은 현재 상태가 무조건 "IDLE"이라는 뜻입니다.
+        # arrival_node가 5초 대기를 마치고 다음 목적지를 세팅하면서 nav_status를 "IDLE"로 리셋해주었기 때문에 여기 도달합니다.
+        
+        ros_node.get_logger().info(f"🚀 이동 시작 -> {blackboard.goal_name}")
+        
+        # 블랙보드에 새롭게 갱신된 다음 목적지 좌표를 Nav2 액션 서버로 '딱 한 번' 발사합니다.
+        ros_node.send_nav_goal(blackboard.goal_x, blackboard.goal_y)  
+        
+        # 명령을 보냈으므로, 다음 틱(0.1초 뒤)에는 이 하단 코드를 타지 않도록 상태를 "EXECUTING"으로 변경해 락을 겁니다.
+        blackboard.nav_status = "EXECUTING"
+        return "SUCCESS"
+
+# ==============================================================================
+# [BRANCH 7] Base Baseline Idle
+# ==============================================================================
+class ActionIdle(BTNode):
+    def tick(self, blackboard, ros_node):
+        blackboard.nav_status = "IDLE"
+        ros_node.get_logger().info("💤 트리 베이스라인 대기 모드", throttle_duration_sec=10.0)
         return "RUNNING"
 
 
-# ROS2 행동트리 구동 노드 주체
+# ==============================================================================
+# [NODE SYSTEM] ROS2 메인 엔진 오케스트레이터
+# ==============================================================================
 class AirportGuideBT(Node):
     def __init__(self, blackboard):
         super().__init__("airport_guide_bt")
-
         self.blackboard = blackboard
         self.cmd_vel_pub = self.create_publisher(Twist, "/cmd_vel", 10)
+        self.nav_client = ActionClient(self, NavigateToPose, '/navigate_to_pose')
 
-        self.nav_client = ActionClient(
-            self,
-            NavigateToPose,
-            '/navigate_to_pose'
-        )
-
-        # 트리 구조 빌드 
         self.root = Selector("Root")
 
-        # 1. 배터리 부족 브랜치
-        battery_branch = Sequence("Battery")
+        battery_branch = Sequence("BatteryBranch")
         battery_branch.add_child(ConditionBatteryLow("BatteryLow"))
         battery_branch.add_child(ActionSystemShutdown("Shutdown"))
 
-        # 2. 긴급 정지 브랜치
-        emergency_branch = Sequence("Emergency")
+        sensor_branch = Sequence("SensorBranch")
+        sensor_branch.add_child(ConditionSensorTimeout("SensorTimeout"))
+        sensor_branch.add_child(ActionSensorEmergencyStop("SensorEStop"))
+
+        emergency_branch = Sequence("EmergencyBranch")
         emergency_branch.add_child(ConditionEmergency("Emergency"))
         emergency_branch.add_child(ActionEmergencyStop("Stop"))
 
-        # 3. 장애물 회피 브랜치
-        avoid_branch = Sequence("Avoidance")
+        human_control_hub = Selector("HumanControlHub")
+        human_lost_seq = Sequence("HumanLostSeq")
+        human_lost_seq.add_child(ConditionHumanLost("HumanLost"))
+        human_lost_seq.add_child(ActionSearchHuman("SearchHuman"))
+        human_far_seq = Sequence("HumanFarSeq")
+        human_far_seq.add_child(ConditionHumanFar("HumanFar"))
+        human_far_seq.add_child(ActionSignalToHuman("SignalToHuman"))
+        human_control_hub.add_child(human_lost_seq)
+        human_control_hub.add_child(human_far_seq)
+
+        avoid_branch = Sequence("AvoidanceBranch")
         avoid_branch.add_child(ConditionObstacle("Obstacle"))
         avoid_branch.add_child(ActionAvoidance("Avoid"))
 
-        # 4. 사람 대기/신호 브랜치
-        human_branch = Sequence("HumanFollow")
-        human_branch.add_child(ConditionHumanFar("HumanFar"))
-        human_branch.add_child(ActionSignalToHuman("Signal"))
-
-        # 5. 목적지 도착 브랜치
-        arrival_branch = Sequence("Arrival")
+        
+        arrival_branch = Sequence("ArrivalBranch")
         arrival_branch.add_child(ConditionArrived("Arrived"))
         arrival_branch.add_child(ActionStopGuide("StopGuide"))
 
-        # 6. 평시 목적지 이동 브랜치
-        nav_branch = Sequence("Navigation")
-        nav_branch.add_child(ConditionHasGoal("HasGoal"))
-        nav_branch.add_child(ActionMoveToGoal("Move"))
+        
+        nav_branch = Sequence("NavigationBranch")
+        nav_branch.add_child(ConditionHasGoal("HasGoal"))     # 1. 목표가 남았는가?
+        nav_branch.add_child(ActionMoveToGoal("MoveToGoal"))   # 2. 🎯 IDLE 상태면 새 목적지로 발사!
 
-        # 우선순위 등록
-        self.root.add_child(battery_branch)    
-        self.root.add_child(emergency_branch)  
-        self.root.add_child(avoid_branch)      
-        self.root.add_child(human_branch)      
-        self.root.add_child(arrival_branch)    
-        self.root.add_child(nav_branch)        
+        # 우선순위(위->아래)에 맞게 차례대로 등록
+        self.root.add_child(battery_branch)    # 0번 브랜치    
+        self.root.add_child(sensor_branch)     # 1번 브랜치 
+        self.root.add_child(emergency_branch)  # 2번 브랜치 
+        self.root.add_child(human_control_hub) # 3번 브랜치       
+        self.root.add_child(avoid_branch)      # 4번 브랜치 
+        self.root.add_child(arrival_branch)    # 5번 브랜치 
+        self.root.add_child(nav_branch)        # 6번 브랜치
+        self.root.add_child(ActionIdle("SystemIdle"))
 
-        # 0.1초 타이머 주기 실행
         self.timer = self.create_timer(0.1, self.bt_tick)
 
-    def send_nav_goal(self, x, y):
-        self.get_logger().error(f"★★★★ GOAL 함수 호출 ★<<< ({x}, {y})")
+    def send_nav_goal(self, x, y):   # Nav2한테 목적지 보내는 코드
+        self.get_logger().info(f"🎯 Nav2 액션 목표 전송 시작: ({x}, {y})")
         goal_msg = NavigateToPose.Goal()
-        goal_msg.pose.header.frame_id = "map"
+        goal_msg.pose.header.frame_id = "map"  # map 좌표기준으로 () 가라  
         goal_msg.pose.header.stamp = self.get_clock().now().to_msg()
         goal_msg.pose.pose.position.x = x
         goal_msg.pose.pose.position.y = y
         goal_msg.pose.pose.orientation.w = 1.0
 
-        self.get_logger().info("Nav2 서버 연결 대기 중...")
-        self.nav_client.wait_for_server()
-        self.get_logger().info(f"충전소 이동 액션 목표 전송 완료 ({x}, {y})")
-        self.nav_client.send_goal_async(goal_msg)
+        self.nav_client.wait_for_server()  # nav 액션서버 대기 
+        self.nav_client.send_goal_async(goal_msg)  # 목표 전송 
+
     
     def bt_tick(self):
         self.root.tick(self.blackboard, self)
-
+    
     def publish_velocity(self, linear_x, angular_z):
         msg = Twist()
         msg.linear.x = linear_x
@@ -229,18 +281,20 @@ class AirportGuideBT(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    
-    # 1. 하나의 공유 자원인 블랙보드 인스턴스 생성
     shared_blackboard = Blackboard()
+    shared_blackboard.last_sensor_time = time.time()
     
-    # 2. 각 노드에 공유 블랙보드 주입하며 생성
+    shared_blackboard.wait_started = False
+    shared_blackboard.wait_start_time = 0.0
+    
     bt_node = AirportGuideBT(shared_blackboard)
     battery_node = BatteryNode(shared_blackboard)
+    arrival_node = ArrivalNode(shared_blackboard) 
     
-    # 3. 멀티스레드 이그제큐터를 생성하여 두 노드가 데이터를 공유하며 동시 병렬 스핀하도록 구동
     executor = MultiThreadedExecutor()
     executor.add_node(bt_node)
     executor.add_node(battery_node)
+    executor.add_node(arrival_node) 
     
     try:
         executor.spin()
@@ -249,6 +303,7 @@ def main(args=None):
     finally:
         bt_node.destroy_node()
         battery_node.destroy_node()
+        arrival_node.destroy_node()
         rclpy.shutdown()
 
 if __name__ == "__main__":

@@ -24,6 +24,7 @@
         "/home/kim/kim_ws/install/dynamixel_sdk_custom_interfaces/local/lib/python3.10/dist-packages",
         "/home/kim/kim_ws/install/dynamixel_sdk/local/lib/python3.10/dist-packages",
         "/opt/ros/humble/lib/python3.10/site-packages",
-        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+        "/opt/ros/humble/local/lib/python3.10/dist-packages",
+        "./src/robot_bringup/test"
     ]
 }
