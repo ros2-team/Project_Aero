@@ -2,9 +2,9 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
-from my_robot_msgs.msg import Detection  
+# from my_robot_msgs.msg import Detection  
 from cv_bridge import CvBridge
-from ultralytics import YOLO
+# from ultralytics import YOLO
 import cv2
 
 class YoloRosPublisher(Node):
@@ -13,7 +13,7 @@ class YoloRosPublisher(Node):
         self.image_sub = self.create_subscription(Image, '/camera/image_raw', self.image_callback, 10)
         
         # 1단계 원시 토픽 발행 (가공 노드인 ga_sub_node가 구독함)
-        self.obj_pub = self.create_publisher(Detection, '/yolo_raw_detection', 10)
+        # self.obj_pub = self.create_publisher(Detection, '/yolo_raw_detection', 10)
         self.bridge = CvBridge()
         self.model = YOLO('yolov8n.pt')
         self.frame_count = 0
@@ -40,18 +40,18 @@ class YoloRosPublisher(Node):
 
                 print("YOLO 검출:", cls_name)
 
-                pub_msg = Detection()
+                # pub_msg = Detection()
 
-                pub_msg.class_name = cls_name
-                pub_msg.direction = ""      # 아직 방향 계산 전
-                pub_msg.distance = 0.0      # 아직 거리 계산 전
+                # pub_msg.class_name = cls_name
+                # pub_msg.direction = ""      # 아직 방향 계산 전
+                # pub_msg.distance = 0.0      # 아직 거리 계산 전
 
-                pub_msg.x = (x1 + x2) // 2
-                pub_msg.y = (y1 + y2) // 2
+                # pub_msg.x = (x1 + x2) // 2
+                # pub_msg.y = (y1 + y2) // 2
 
-                print("보내기 전 =", pub_msg.class_name)
+                # print("보내기 전 =", pub_msg.class_name)
 
-                self.obj_pub.publish(pub_msg)
+                # self.obj_pub.publish(pub_msg)
 
         annotated_frame = r.plot()
         cv2.imshow("YOLO View", annotated_frame)
