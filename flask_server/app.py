@@ -3,6 +3,7 @@ from flask import render_template
 from flask import request
 from flask import jsonify
 from database.database import get_db_connection
+from database.database import get_location
 
 
 app = Flask(__name__)
@@ -80,6 +81,16 @@ def call_robot():
         return jsonify({
             "success" : False
         }), 500
+    
+# api test
+@app.route("/api/location/<location_code>")
+def location_api(location_code):
+    location = get_location(location_code)
+    if location is None:
+        return jsonify({
+            "status" : "error"
+        }), 404
+    return jsonify(location)
 
 if __name__ == "__main__":
     app.run(
