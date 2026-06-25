@@ -15,7 +15,7 @@ class RearCamera(Node):
     def __init__(self):
         super().__init__('rear_recognizer')
         # '/yolo_counts'라는 이름으로 정수 배열 토픽을 발행할 준비를 합니다.
-        self.subscriber = self.create_subscription(CompressedImage, '/camera/image_raw/compressed', self.cam_cb, 10)
+        self.subscriber = self.create_subscription(CompressedImage, '/cam1/image_raw/compressed', self.cam_cb, 10)
         self.model = YOLO('yolov8n.pt')
         
         # COCO 데이터셋 기준 클래스 번호 명시 사람 0, 차 2
@@ -29,16 +29,15 @@ class RearCamera(Node):
             self.get_logger().error('이미지 디코딩 실패')
             return
         
-        display_frame = self.process_and_publish(cv_image)
+        display_frame, bbox = self.process_and_publish(cv_image)
+        hist = self.cal_hsv(bbox)
 
         cv2.imshow('Webcam Test', display_frame)
-        
         cv2.waitKey(1)
 
     def process_and_publish(self, frame):
         # YOLO 추론 수행
-        results = self.model(frame, stream=True, device = 'cpu', imgsz = 320)
-        
+        results = self.model(frame, stream=True, device = 'cpu', imgsz = 320, verbose = False)
         person_count = 0
         annotated_frame = frame
 
@@ -49,6 +48,13 @@ class RearCamera(Node):
             if r.boxes is not None:
                 classes = r.boxes.cls.int().tolist()
                 person_count = classes.count(self.PERSON_CLASS_ID)
+                
+                for box in r.boxes:
+                    class_id = int(box.cls[0])
+                    if class_id == self.PERSON_CLASS_ID:
+                    # xyxy 좌표를 뽑아서 정수(int) 리스트로 변환!
+                    # 결과: [x_min, y_min, x_max, y_max]
+                        bbox = box.xyxy[0].int().tolist() 
 
         # ROS2 메시지 객체 생성 및 데이터 매핑
         # msg = Int32MultiArray()
@@ -59,7 +65,12 @@ class RearCamera(Node):
         # # 토픽 발행
         # self.publisher_.publish(msg)
         
-        return annotated_frame
+        return annotated_frame, bbox
+
+    def cal_hsv(self, data):
+        
+        pass
+
 
 def main(args=None):
     # 1. ROS2 통신 초기화
