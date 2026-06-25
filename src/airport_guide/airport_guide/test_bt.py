@@ -168,23 +168,35 @@ class ConditionHasGoal(BTNode):
         return "FAILURE" 
 
 class ActionMoveToGoal(BTNode):     
-    def tick(self, blackboard, ros_node):
-        # [방어막] 로봇이 이미 새 좌표를 받고 굴러가고 있는 주행 상태("EXECUTING")인가?
-        if blackboard.nav_status == "EXECUTING":
-            # 이미 가고 있다면 중복으로 목표 전송을 하지 않도록 즉시 SUCCESS를 반환하여 안전하게 통과합니다.
-            return "SUCCESS"
+    def __init__(self, name):
+        super().__init__(name)
+        self.start_track_time = None
 
-        # 💡 [핵심 해답] 위 방어막(EXECUTING)을 통과했다는 것은 현재 상태가 무조건 "IDLE"이라는 뜻입니다.
-        # arrival_node가 5초 대기를 마치고 다음 목적지를 세팅하면서 nav_status를 "IDLE"로 리셋해주었기 때문에 여기 도달합니다.
-        
-        ros_node.get_logger().info(f"🚀 이동 시작 -> {blackboard.goal_name}")
-        
-        # 블랙보드에 새롭게 갱신된 다음 목적지 좌표를 Nav2 액션 서버로 '딱 한 번' 발사합니다.
-        ros_node.send_nav_goal(blackboard.goal_x, blackboard.goal_y)  
-        
-        # 명령을 보냈으므로, 다음 틱(0.1초 뒤)에는 이 하단 코드를 타지 않도록 상태를 "EXECUTING"으로 변경해 락을 겁니다.
-        blackboard.nav_status = "EXECUTING"
-        return "SUCCESS"
+    def tick(self, blackboard, ros_node):
+        # 1. 상태가 IDLE이면 -> 새 좌표를 Nav2에 딱 한 번 발사
+        if blackboard.nav_status == "IDLE":
+            ros_node.get_logger().info(f"🚀 이동 시작 -> {blackboard.goal_name}")
+            ros_node.send_nav_goal(blackboard.goal_x, blackboard.goal_y)  
+            
+            blackboard.nav_status = "NAV_STARTING"
+            self.start_track_time = time.time()
+            return "RUNNING"
+
+        # 2. Nav2 액션 서버 접수 및 오도메트리 안착 지연 시간 벌어주기 (0.5초)
+        if blackboard.nav_status == "NAV_STARTING":
+            if (time.time() - self.start_track_time) < 0.5:
+                return "RUNNING"
+            
+            ros_node.get_logger().info("🟢 물리 주행 상태 추적 시작.")
+            blackboard.nav_status = "EXECUTING"
+            return "RUNNING" # 💡 기존 SUCCESS에서 RUNNING으로 변경!
+
+        # 3. 💡 핵심: 로봇이 주행하는 내내 RUNNING을 뱉어줌으로써, 
+        # 트리가 맨 밑바닥 ActionIdle로 추락해서 nav_status를 IDLE로 깨부수는 것을 원천 차단합니다.
+        if blackboard.nav_status == "EXECUTING":
+            return "RUNNING"
+
+        return "FAILURE"
 
 # ==============================================================================
 # [BRANCH 7] Base Baseline Idle

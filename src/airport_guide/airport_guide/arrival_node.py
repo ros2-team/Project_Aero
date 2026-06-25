@@ -36,20 +36,25 @@ class ArrivalNode(Node):
         if not self.blackboard.has_goal:
             return
 
+        # 💡 [에러 해결 및 방어막 코드]
+        # 행동 트리가 다음 경유지 좌표를 바꾸고 상태를 "IDLE"로 세팅한 순간에는 거리를 계산하지 않습니다.
+        # 행동 트리가 새 목표를 Nav2로 완전히 쏘고 상태를 "EXECUTING"으로 복구했을 때만 연산을 재개합니다.
+        if self.blackboard.nav_status != "EXECUTING":
+            return
+
         # 1. 거리 계산
         dx = self.blackboard.goal_x - self.blackboard.current_x
         dy = self.blackboard.goal_y - self.blackboard.current_y
         distance = math.sqrt(dx**2 + dy**2)
 
-        arrival_threshold = 0.2
+        self.get_logger().info(f"🔍 [디버그] 목표: {self.blackboard.goal_name}, 남은거리: {distance:.3f}m, 상태: {self.blackboard.nav_status}", throttle_duration_sec=0.5)
+
+        arrival_threshold = 0.9
 
         # 2. 최초 도착 판단
         if self.blackboard.nav_status == "EXECUTING" and distance <= arrival_threshold and not self.blackboard.is_arrived:
-            # 남은 거리가 0.2m 이하로 들어오는지 감시
-            self.get_logger().info(f"🎯 목적지 [{self.blackboard.goal_name}] 근접 감지! 5초 대기를 시작합니다.")
-            # 이 변수를 True로 바꾸는 순간
-            # test_bt.py의 5번 브랜치(ConditionArrived)가 SUCCESS를 뱉으며 
-            # ActionStopGuide가 실행되어 물리 로봇의 바퀴를 멈춤(0.0, 0.0)
+            self.get_logger().info(f"🎯 목적지 [{self.blackboard.goal_name}] 근접 감지! 5초 대기를 시작합니다. (남은거리: {distance:.2f}m)")
+            
             self.blackboard.is_arrived = True
             self.blackboard.wait_started = True
             self.blackboard.wait_start_time = time.time()
@@ -71,8 +76,9 @@ class ArrivalNode(Node):
                     # 상태 초기화하여 다시 출발하도록 설정
                     self.blackboard.is_arrived = False
                     self.blackboard.wait_started = False
-                    # nav_status를 "IDLE"로 리셋하여, 행동 트리의 6번 
-                    # "아, 로봇이 대기를 끝내고 새로 출발할 준비가 되었구나!"라고 알아채고 새 좌표로 Nav2 액션을 쏘게 유도합니다.
+                    
+                    # 💡 중요: 이 노드가 IDLE로 바꾸는 즉시 위쪽의 방어막에 걸려
+                    # 트리가 새 목표를 쏘고 다시 EXECUTING으로 만들 때까지 거리 계산 루프가 안전하게 멈춥니다.
                     self.blackboard.nav_status = "IDLE"   
                     self.get_logger().info(f"➡️ 대기 완료. 다음 경유지 장전: {self.blackboard.goal_name}")
                 
