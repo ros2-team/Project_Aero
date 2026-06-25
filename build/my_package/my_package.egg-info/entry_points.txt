@@ -1,0 +1,3 @@
+[console_scripts]
+web_server = my_package.web_server:main
+
