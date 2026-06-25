@@ -7,18 +7,25 @@ def get_db_connection():
         password = "1234",
         database = "projectAR"
     )
-def get_location(location_code):
-    
+def get_locations():
+
     conn = get_db_connection()
+
     cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT
+            location_code,
+            location_name,
+            pos_x,
+            pos_y,
+            yaw
+        FROM location
+        ORDER BY location_name
+    """)
     
-    cursor.execute(
-        """select * from location where location_code = %s""",
-        (location_code,)
-    )
-    
-    result = cursor.fetchone()
-    
+    result = cursor.fetchall()
+
     cursor.close()
     conn.close()
 

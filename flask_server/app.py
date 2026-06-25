@@ -3,7 +3,8 @@ from flask import render_template
 from flask import request
 from flask import jsonify
 from database.database import get_db_connection
-from database.database import get_location
+from database.database import get_locations
+from database.location import get_location_by_code
 
 
 app = Flask(__name__)
@@ -22,7 +23,12 @@ def welcome():
 # 목적지 선택
 @app.route("/destination")
 def destination():
-    return render_template("destination.html")
+    locations = get_locations()
+    
+    return render_template(
+        "destination.html",
+        locations = locations
+    )
 
 # 안내 중
 @app.route("/navigation")
@@ -81,17 +87,43 @@ def call_robot():
         return jsonify({
             "success" : False
         }), 500
-    
-# api test
-@app.route("/api/location/<location_code>")
-def location_api(location_code):
-    location = get_location(location_code)
-    if location is None:
-        return jsonify({
-            "status" : "error"
-        }), 404
-    return jsonify(location)
+#api
+@app.route("/api/locations")
+def api_locations():
+    locations = get_locations()
+    return jsonify(locations)
 
+@app.route("/api/navigation/start", methods = ["POST"])
+def start_navigation():
+    request_data = request.get_json()
+    print("수신 데이터")
+    print(request_data)
+    
+    navigation_route = []
+
+    for item in request_data:
+        location = get_location_by_code(item["location_code"])
+        if not location:
+            return jsonify({
+                "status" : "error",
+                "message" : f"{item['location_code']} 조회 실패"
+            }), 404
+        navigation_route.append({
+            "order" : item["order"],
+            "location_code" : location["location_code"],
+            "location_name" : location["location_name"],
+            "x" : location["pos_x"],
+            "y" : location["pos_y"],
+            "yaw" : location["yaw"]
+        })
+    print("최종 경로")
+    for route in navigation_route:
+        print(route)
+    return jsonify({
+        "status" : "success",
+        "route" : navigation_route
+    })
+    
 if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
