@@ -24,7 +24,9 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'main_bt = airport_guide.test_bt:main',
+            'test_bt = airport_guide.test_bt:main',
+            'arrival_node = airport_guide.arrival_node:main',
+            'front_came_node = airport_guide.front_cam_node:main',
         ],
     },
 )

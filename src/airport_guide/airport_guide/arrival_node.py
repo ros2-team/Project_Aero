@@ -32,27 +32,23 @@ class ArrivalNode(Node):
         self.blackboard.sensor_timeout = False
 
     def check_arrival(self):
-        # 가야 할 목적지가 없다면 연산을 수행하지 않고 패스합니다.
-        if not self.blackboard.has_goal:
+        # 팩트: 갈 곳이 없거나, 행동 트리가 아직 Nav2에 목표를 쏘기도 전(goal_sent == False)이라면 거리 연산을 하지 않고 대기합니다.
+        if not self.blackboard.has_goal or not self.blackboard.goal_sent:
             return
 
-        # 💡 [에러 해결 및 방어막 코드]
-        # 행동 트리가 다음 경유지 좌표를 바꾸고 상태를 "IDLE"로 세팅한 순간에는 거리를 계산하지 않습니다.
-        # 행동 트리가 새 목표를 Nav2로 완전히 쏘고 상태를 "EXECUTING"으로 복구했을 때만 연산을 재개합니다.
-        if self.blackboard.nav_status != "EXECUTING":
-            return
-
-        # 1. 거리 계산
+        # 1. 현재 로봇 위치와 목적지 사이의 유클리드 물리 거리 계산
         dx = self.blackboard.goal_x - self.blackboard.current_x
         dy = self.blackboard.goal_y - self.blackboard.current_y
         distance = math.sqrt(dx**2 + dy**2)
 
-        self.get_logger().info(f"🔍 [디버그] 목표: {self.blackboard.goal_name}, 남은거리: {distance:.3f}m, 상태: {self.blackboard.nav_status}", throttle_duration_sec=0.5)
+        self.get_logger().info(f"🔍 [디버그] 목표: {self.blackboard.goal_name}, 남은거리: {distance:.3f}m", throttle_duration_sec=1.0)
 
+        # 허용 반경 임계값 설정 (0.9m)
         arrival_threshold = 0.9
 
         # 2. 최초 도착 판단
-        if self.blackboard.nav_status == "EXECUTING" and distance <= arrival_threshold and not self.blackboard.is_arrived:
+        # 팩트: 아직 도착 플래그가 안 켜졌고 반경 이내로 들어왔다면 즉시 도착 스위치를 올리고 타이머를 가동합니다.
+        if distance <= arrival_threshold and not self.blackboard.is_arrived:
             self.get_logger().info(f"🎯 목적지 [{self.blackboard.goal_name}] 근접 감지! 5초 대기를 시작합니다. (남은거리: {distance:.2f}m)")
             
             self.blackboard.is_arrived = True
@@ -65,28 +61,79 @@ class ArrivalNode(Node):
             self.get_logger().info(f"📍 [{self.blackboard.goal_name} 대기 중] 경과 시간: {elapsed:.1f}초", throttle_duration_sec=1.0)
             
             if elapsed >= 5.0:
-                # 다음 경유지가 남아 있는 경우
+                # 시나리오 A: 다음 남은 경유지가 리스트에 존재하는 경우
                 if len(self.blackboard.waypoint_list) > 0:
                     next_wp = self.blackboard.waypoint_list.pop(0)
-                    # 리스트 맨 앞 꺼내서 목적지 교체
+                    
+                    # 블랙보드의 목적지 좌표 데이터를 다음 타겟으로 교체장전합니다.
                     self.blackboard.goal_name = next_wp["name"]
                     self.blackboard.goal_x = next_wp["x"]
                     self.blackboard.goal_y = next_wp["y"]
                     
-                    # 상태 초기화하여 다시 출발하도록 설정
+                    # 🎯 [핵심] 플래그 초기화
+                    # 도착 플래그와 대기 플래그를 꺼서 상위 5번 브랜치(정지 제어)를 닫아버립니다.
                     self.blackboard.is_arrived = False
                     self.blackboard.wait_started = False
                     
-                    # 💡 중요: 이 노드가 IDLE로 바꾸는 즉시 위쪽의 방어막에 걸려
-                    # 트리가 새 목표를 쏘고 다시 EXECUTING으로 만들 때까지 거리 계산 루프가 안전하게 멈춥니다.
-                    self.blackboard.nav_status = "IDLE"   
-                    self.get_logger().info(f"➡️ 대기 완료. 다음 경유지 장전: {self.blackboard.goal_name}")
+                    # 🎯 [자물쇠 해제] goal_sent 주행 잠금 플래그를 False로 열어줍니다.
+                    # 이 스위치가 열리는 순간, 다음 틱에 행동 트리의 6번 브랜치가 새 목적지를 Nav2로 딱 한 번 발사하게 됩니다.
+                    self.blackboard.goal_sent = False   
+                    self.get_logger().info(f"➡️ 대기 완료. 다음 경유지 장전 및 주행 잠금 해제: {self.blackboard.goal_name}")
                 
-                # 리스트에 남은 경유지가 없는 최종 목적지인 경우
+                # 시나리오 B: 리스트에 남은 경유지가 없는 최종 목적지인 경우
                 else:
-                    # 최종 목적지 도달 완료
-                    self.get_logger().info("✅ 모든 안내 여정이 끝났습니다.")
+                    self.get_logger().info("✅ 모든 안내 여정이 최종 완료되었습니다.")
                     self.blackboard.has_goal = False
-                    self.blackboard.nav_status = "IDLE"
                     self.blackboard.is_arrived = False
                     self.blackboard.wait_started = False
+                    self.blackboard.goal_sent = False
+
+
+# ==============================================================================
+# [DEBUG & LAUNCH INTERFACE] 단독 테스트 및 ROS 2 시스템 통합용 메인 엔트리 블록
+# ==============================================================================
+def main(args=None):
+    rclpy.init(args=args)
+    
+    # 🎯 팩트: 타 노드 종속성 없이 단독 실행(`python3 arrival_node.py`)할 때 
+    # 참조 에러(AttributeError)가 발생하는 것을 막기 위해 최소한의 더미 가상 컨테이너를 주입합니다.
+    class DummyBlackboard:
+        def __init__(self):
+            # 주행 타겟 기저 데이터 세팅
+            self.has_goal = True
+            self.goal_sent = True
+            self.goal_name = "Debug_Station_A"
+            self.goal_x = 1.5
+            self.goal_y = 2.5
+            
+            # 오도메트리 수신용 기본 변수
+            self.current_x = 0.0
+            self.current_y = 0.0
+            
+            # 하드웨어 무결성 타이머 스위치
+            self.last_sensor_time = time.time()
+            self.sensor_timeout = False
+            
+            # 스케줄러 상태 스위치
+            self.is_arrived = False
+            self.wait_started = False
+            self.wait_start_time = 0.0
+            
+            # 다음 가상의 경유지 데이터 적재 리스트 예시
+            self.waypoint_list = [
+                {"name": "Debug_Station_B", "x": -0.5, "y": 1.0}
+            ]
+            
+    db = DummyBlackboard()
+    node = ArrivalNode(blackboard=db)
+    
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
