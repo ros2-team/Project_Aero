@@ -110,13 +110,16 @@ function startNavigation() {
     .then(data => {
         console.log("서버 응답:", data);
         if (data.status === "success") {
-            alert("로봇에게 새로운 미방문 경로 전송을 완료했습니다.");
-        } else {
+            const firstDestination = data.route[0].location_name;
+            location.href = '/navigation?destination=${encodeURIComponent(firstDestination)}';    
+        } 
+        else {
             alert("경로 전송 실패: " + data.message);
         }
     })
     .catch(error => {
         console.error("Flask 통신 에러:", error);
+        alert("Flask 통신 에러 발생");
     });
 }
 window.onload = async() => {

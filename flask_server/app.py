@@ -12,11 +12,19 @@ from database.location import get_location_by_code
 
 #   function    ---------------------------------------------------------------------------------------------
 
-def send_goal_to_ros2(x, y, yaw):
+def send_route_to_ros2(navigation_route):
+    args = []
+    for target in navigation_route:
+        args.append(str(target["x"]))
+        args.append(str(target["y"]))
+        args.append(str(target["yaw"]))
+    
+    ros_args = " ".join(args)
+
     command = f"""
     source /opt/ros/humble/setup.bash &&
     source /home/celestial/projectAR/ros2_ws/install/setup.bash &&
-    ros2 run guide_robot navigation_server {x} {y} {yaw}
+    ros2 run guide_robot navigation_server {ros_args}
     """
     subprocess.Popen(
         ["bash", "-c", command]
@@ -138,18 +146,11 @@ def start_navigation():
     for route in navigation_route:
         print(route)
 
-    #   수정예정    ---------------------------------------------------------------------------------------------
-    first_target = navigation_route[0]
-    send_goal_to_ros2(
-        first_target["x"],
-        first_target["y"],
-        first_target["yaw"]
-    )
-    #---------------------------------------------------------------------------------------------
+    send_route_to_ros2(navigation_route)
 
     return jsonify({
         "status" : "success",
-        "message" : "Ros2 navigation goal sent",
+        "message" : "Ros2 navigation route sent",
         "route" : navigation_route
     })
     
