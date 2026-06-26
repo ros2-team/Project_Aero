@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'guide_node = guide_robot.guide_node:main',
+            'navigation_server = guide_robot.navigation_server:main',
         ],
     },
 )

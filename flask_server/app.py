@@ -1,3 +1,7 @@
+
+#   library     ---------------------------------------------------------------------------------------------
+
+import subprocess
 from flask import Flask
 from flask import render_template
 from flask import request
@@ -6,6 +10,19 @@ from database.database import get_db_connection
 from database.database import get_locations
 from database.location import get_location_by_code
 
+#   function    ---------------------------------------------------------------------------------------------
+
+def send_goal_to_ros2(x, y, yaw):
+    command = f"""
+    source /opt/ros/humble/setup.bash &&
+    source /home/celestial/projectAR/ros2_ws/install/setup.bash &&
+    ros2 run guide_robot navigation_server {x} {y} {yaw}
+    """
+    subprocess.Popen(
+        ["bash", "-c", command]
+    )
+    
+#   flask server    ---------------------------------------------------------------------------------------------
 
 app = Flask(__name__)
 
@@ -87,7 +104,7 @@ def call_robot():
         return jsonify({
             "success" : False
         }), 500
-#api
+#   api     ---------------------------------------------------------------------------------------------
 @app.route("/api/locations")
 def api_locations():
     locations = get_locations()
@@ -116,11 +133,23 @@ def start_navigation():
             "y" : location["pos_y"],
             "yaw" : location["yaw"]
         })
+    
     print("최종 경로")
     for route in navigation_route:
         print(route)
+
+    #   수정예정    ---------------------------------------------------------------------------------------------
+    first_target = navigation_route[0]
+    send_goal_to_ros2(
+        first_target["x"],
+        first_target["y"],
+        first_target["yaw"]
+    )
+    #---------------------------------------------------------------------------------------------
+
     return jsonify({
         "status" : "success",
+        "message" : "Ros2 navigation goal sent",
         "route" : navigation_route
     })
     
