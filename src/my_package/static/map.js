@@ -64,8 +64,9 @@ function drawMap() {
     );
 
     //일자 벽은 실제 위치 모르니 일단 주석처리
-    const wallStart = worldToCanvas(-1.5, 1.8);
-    const wallEnd   = worldToCanvas(0.0, 1.8);
+    const wallStart = worldToCanvas(-0.07, -0.7);
+    const wallEnd   = worldToCanvas(0.92, -0.7);
+
     ctx.beginPath();
     ctx.moveTo(wallStart.x, wallStart.y);
     ctx.lineTo(wallEnd.x, wallEnd.y);
@@ -87,29 +88,12 @@ function drawPlan(){
 
     ctx.beginPath();
 
-    // 시작점 = 현재 로봇 위치
-    let robot = worldToCanvas(
-        robotX,
-        robotY
-    );
+    let start = worldToCanvas(pathData[0].x, pathData[0].y);
+    ctx.moveTo(start.x, start.y)
 
-    ctx.moveTo(
-        robot.x,
-        robot.y
-    );
-
-    // 나머지 경로
-    for(let i=0;i<pathData.length;i++){
-
-        let p = worldToCanvas(
-            pathData[i].x,
-            pathData[i].y
-        );
-
-        ctx.lineTo(
-            p.x,
-            p.y
-        );
+    for(let i = 1; i < pathData.length; i++){
+        let p = worldToCanvas(pathData[i].x, pathData[i].y);
+        ctx.lineTo(p.x, p.y);
     }
 
     ctx.stroke();
@@ -201,12 +185,61 @@ function drawRobot(){
     ctx.fill();
 }
 
+// =====================
+// 일시정지 버튼
+// =====================
+
+function createPauseButton() {
+    const btn = document.createElement("button");
+    btn.id = "pauseBtn";
+    btn.textContent = "⏸ 일시정지";
+
+    btn.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 12px 24px;
+        font-size: 16px;
+        font-weight: bold;
+        background-color: #2563eb;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        z-index: 1000;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    `;
+
+    btn.addEventListener("mouseenter", () => {
+        btn.style.backgroundColor = "#1d4ed8";
+    });
+    btn.addEventListener("mouseleave", () => {
+        btn.style.backgroundColor = "#2563eb";
+    });
+
+    btn.addEventListener("click", () => {
+        goToPreviousPage();
+    });
+
+    document.body.appendChild(btn);
+}
+
+function goToPreviousPage() {
+
+    //window.location.href = "/previous-page";
+    console.log("이전 페이지로 이동");
+}
+
+
 
 // =====================
 // 전체 그리기
 // =====================
 
 function draw(){
+
+    createPauseButton();
 
     ctx.clearRect(
         0,
