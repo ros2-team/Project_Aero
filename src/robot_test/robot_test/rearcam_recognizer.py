@@ -6,8 +6,7 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import CompressedImage
-from cv_bridge import CvBridge, CvBridgeError
-import cv2.aruco as aruco
+from cv_bridge import CvBridge
 import cv2
 import sys
 

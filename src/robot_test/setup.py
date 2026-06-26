@@ -34,7 +34,8 @@ setup(
             'send_x_y = robot_test.send_x_y:main',
             'rearcam_recognizer = robot_test.rearcam_recognizer:main',
             'waypoint_test = robot_test.waypoint_test:main',
-            'rearcam = robot_test.rearcam:main'
+            'rearcam = robot_test.rearcam:main',
+            'rearcam_ctrl = robot_test.rear_cam_ctrl:main'
         ],
     },
 )
