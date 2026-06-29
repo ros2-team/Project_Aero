@@ -1,5 +1,11 @@
+import numpy as np
 import rclpy
 from rclpy.node import Node
+import cv2
+from rclpy.qos import qos_profile_sensor_data
+import math
+from robot_test_msgs.msg import LidarScanData
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from std_msgs.msg import Float32MultiArray
 
 class ControlNode(Node):
@@ -8,7 +14,13 @@ class ControlNode(Node):
         
         # 인지 노드(Perception)에서 쏴주는 타겟 데이터 구독
         self.target_sub = self.create_subscription(Float32MultiArray, '/target_data', self.target_callback, 10)
+        self.target_sub = self.create_subscription(LidarScanData, '/scan/rear', self.lidar_cb, qos_profile_sensor_data)
         self.get_logger().info("✅ Control Node Started. Waiting for /target_data...")
+        
+    def lidar_cb(self, data):
+        angles = data.angles
+        distances = data.distances
+        print(angles, distances)
 
     def target_callback(self, msg):
         # 배열 길이 예외 방어막 (인덱스 에러 방지)

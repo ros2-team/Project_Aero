@@ -53,7 +53,8 @@ class PerceptionNode(Node):
         
         # 3. 타겟 정보 추출 (Auto Lock-on 포함)
         target_info = self._extract_target_data(results)
-        print("타겟 정보 !! ", target_info[0])
+        print("타겟 정보입니다. (객체 id), (바운딩 박스 크기), (바운딩 박스 중앙 x좌표) ", target_info)
+        print("박스의 x 좌표입니다", self.boxes)
 
         # 디버깅용 화면 출력 (실전에서는 주석 처리하여 리소스 절약)
         # cv2.imshow("Tracking", annotated_frame)
@@ -90,20 +91,20 @@ class PerceptionNode(Node):
             return self._handle_empty_frame()
 
         # 데이터 분리 (x,y), id, 바운딩박스 면적 크기, 원본 이미지
-        boxes = results[0].boxes.xyxy.cpu().numpy()
+        self.boxes = results[0].boxes.xyxy.cpu().numpy()
         track_ids = results[0].boxes.id.int().cpu().tolist()
-        areas = [(box[2] - box[0]) * (box[3] - box[1]) for box in boxes]
+        areas = [(box[2] - box[0]) * (box[3] - box[1]) for box in self.boxes]
         img = results[0].orig_img  # 원본 이미지 (히스토그램 추출용)
 
         # 1. 락온된 타겟이 현재 화면에 있는 경우 (최우선 순위 유지)
         if self.locked_id in track_ids:
-            return self._process_locked_target(track_ids, boxes, areas, img)
+            return self._process_locked_target(track_ids, self.boxes, areas, img)
 
         # 2. 타겟을 잃어버렸지만 리셋 전인 경우 -> 히스토그램 Re-ID 시도
         if self.locked_id != -1:
-            reid_success = self._attempt_reid(track_ids, boxes, img)
+            reid_success = self._attempt_reid(track_ids, self.boxes, img)
             if reid_success:
-                return self._process_locked_target(track_ids, boxes, areas, img)
+                return self._process_locked_target(track_ids, self.boxes, areas, img)
             else:
                 return self._handle_target_lost()
 

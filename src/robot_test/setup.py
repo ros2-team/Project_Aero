@@ -32,9 +32,9 @@ setup(
             'robot_test = robot_test.robot_test:main',
             'battery_gogo = robot_test.battery_gogo:main',
             'send_x_y = robot_test.send_x_y:main',
-            'rearcam_recognizer = robot_test.rearcam_recognizer:main',
-            'waypoint_test = robot_test.waypoint_test:main',
             'rearcam = robot_test.rearcam:main',
+            'waypoint_test = robot_test.waypoint_test:main',
+            'frontrear_lidar = robot_test.front_rear_lidar:main',
             'rearcam_ctrl = robot_test.rear_cam_ctrl:main'
         ],
     },
