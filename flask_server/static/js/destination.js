@@ -111,7 +111,8 @@ function startNavigation() {
         console.log("서버 응답:", data);
         if (data.status === "success") {
             const firstDestination = data.route[0].location_name;
-            location.href = '/navigation?destination=${encodeURIComponent(firstDestination)}';    
+            const firstLocationCode = data.route[0].location_code;
+            location.href = '/navigation?destination=${encodeURIComponent(firstDestination)}&location_code=${encodeURIComponent(firstLocationCode)}';    
         } 
         else {
             alert("경로 전송 실패: " + data.message);

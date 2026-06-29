@@ -6,12 +6,13 @@ from flask import Flask
 from flask import render_template
 from flask import request
 from flask import jsonify
+from flask_socketio import SocketIO
+from flask_socketio import emit
 from database.database import get_db_connection
 from database.database import get_locations
 from database.location import get_location_by_code
 
 #   function    ---------------------------------------------------------------------------------------------
-
 def send_route_to_ros2(navigation_route):
     args = []
     for target in navigation_route:
@@ -29,11 +30,27 @@ def send_route_to_ros2(navigation_route):
     subprocess.Popen(
         ["bash", "-c", command]
     )
-    
-#   flask server    ---------------------------------------------------------------------------------------------
 
+#   flask init     ---------------------------------------------------------------------------------------------    
 app = Flask(__name__)
+socketio = SocketIO(
+    app,
+    cors_allowed_origins = "*"
+)
 
+#   flask socketio    ---------------------------------------------------------------------------------------------    
+@socketio.on("connect")
+def handle_connect():
+    print("Websocket connected")
+    emit("navigation_status",
+        {"status" : "connected",
+        "message" : "WebSocket 연결완료"})
+
+@socketio.on("disconnect")
+def handle_disconnect():
+    print("WebSocket disconnected")
+    
+#   flask route    ---------------------------------------------------------------------------------------------
 # 로밍 화면
 @app.route("/")
 @app.route("/idle")
@@ -61,12 +78,18 @@ def navigation():
 
     destination = request.args.get(
         "destination",
-        "화장실"
+        "목적지"
+    )
+
+    location_code = request.args.get(
+        "location_code",
+        "unknown"
     )
 
     return render_template(
         "navigation.html",
-        destination=destination
+        destination=destination,
+        location_code=location_code
     )
 
 # 안내 완료
@@ -155,7 +178,8 @@ def start_navigation():
     })
     
 if __name__ == "__main__":
-    app.run(
+    socketio.run(
+        app,
         host="0.0.0.0",
         port=5000,
         debug=True
