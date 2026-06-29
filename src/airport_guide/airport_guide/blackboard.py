@@ -12,7 +12,7 @@ class Blackboard:
         self.last_sensor_time = time.time() # 센서(오도메트리 등)가 살아있는지 체크하는 시간 기록
         self.sensor_timeout = False       # 1초 이상 센서가 먹통이면 True가 되는 스위치
         
-        # 🎯 [추가] 웹 인터페이스 제어 플래그 (1.5번 웹 일시정지 브랜치와 연동)
+        # [추가] 웹 인터페이스 제어 플래그 (1.5번 웹 일시정지 브랜치와 연동)
         self.is_paused = False            # 웹에서 일시정지를 누르면 True가 되는 스위치
         
         # ----------------------------------------------------------------------
@@ -27,17 +27,17 @@ class Blackboard:
         self.is_front_human = False         # 전방 카메라에 사람이 잡혔는가?
         self.is_rear_human = False          # 후방 카메라에 사람이 잡혔는가?
 
-        # 🎯 [추가] 카메라 + 라이다 융합 판단 결과 플래그 (트리 2번, 4번과 연동)
+        # [추가] 카메라 + 라이다 융합 판단 결과 플래그 (트리 2번, 4번과 연동)
         self.is_dynamic_obstacle = False  # 전방에 움직이는 장애물(사람) 존재 여부
         self.is_static_obstacle = False   # 전방에 멈춰있는 고정 장애물 존재 여부
         
         # ----------------------------------------------------------------------
         # 3. 후방 사용자 추적(Human Tracking) 플래그
         # ----------------------------------------------------------------------
-        self.human_distance = 1.2         # 주인이 나와 떨어진 거리
-        self.human_tracked = False        # 현재 주인을 락온(Lock-on)하여 추적 중인가? (초기값 False)
-        self.human_far = False            # 주인이 너무 멀어져서 멈춰 서서 기다려야 하는가?
-        self.human_lost = False           # 주인을 완전히 놓쳐서 탐색 모드로 가야 하는가?
+        self.human_distance = 1.2         # 사용자와 떨어진 거리
+        self.human_tracked = False        # 사용자를 락온(Lock-on)하여 추적 중인가? (초기값 False)
+        self.human_far = False            # 사용자와 너무 멀어져서 멈춰 서서 기다려야 하는가?
+        self.human_lost = False           # 사용자 놓쳐서 탐색 모드로 가야 하는가?
         self.rear_target_id = -1          # ByteTrack이 부여한 주인의 고유 번호 (-1은 지정 안 됨)
         self.rear_cam_angle = 90.0        # 후방 서보 모터의 현재 각도 (0~180도)
         self.human_lost_timer = 0.0
