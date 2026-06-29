@@ -70,12 +70,12 @@ class ArrivalNode(Node):
                     self.blackboard.goal_x = next_wp["x"]
                     self.blackboard.goal_y = next_wp["y"]
                     
-                    # 🎯 [핵심] 플래그 초기화
+                    # [핵심] 플래그 초기화
                     # 도착 플래그와 대기 플래그를 꺼서 상위 5번 브랜치(정지 제어)를 닫아버립니다.
                     self.blackboard.is_arrived = False
                     self.blackboard.wait_started = False
                     
-                    # 🎯 [자물쇠 해제] goal_sent 주행 잠금 플래그를 False로 열어줍니다.
+                    # [자물쇠 해제] goal_sent 주행 잠금 플래그를 False로 열어줍니다.
                     # 이 스위치가 열리는 순간, 다음 틱에 행동 트리의 6번 브랜치가 새 목적지를 Nav2로 딱 한 번 발사하게 됩니다.
                     self.blackboard.goal_sent = False   
                     self.get_logger().info(f"➡️ 대기 완료. 다음 경유지 장전 및 주행 잠금 해제: {self.blackboard.goal_name}")

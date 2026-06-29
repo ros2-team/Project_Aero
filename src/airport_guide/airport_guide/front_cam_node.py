@@ -29,12 +29,12 @@ class FrontCameraNode(Node):
         self.stop_class_ids = [0, 15, 16, 17, 18, 19]
         self.avoid_class_ids = [2, 5, 7]
         
-        # 🎯 [CPU 과열 방지 핵심 변수] 최종 YOLO 연산 수행 타임스탬프 기록
+        # [CPU 과열 방지 핵심 변수] 최종 YOLO 연산 수행 타임스탬프 기록
         self.last_inference_time = time.time()
-        # 🎯 [추론 주기 설정] 0.2초에 1번만 YOLO 돌리기 (약 5 FPS 제한 -> CPU 부하 극적인 감소 효과)
+        # [추론 주기 설정] 0.2초에 1번만 YOLO 돌리기 (약 5 FPS 제한 -> CPU 부하 극적인 감소 효과)
         self.inference_interval = 0.2 
         
-        # 🎯 최신 프레임 결과 보존용 변수 (YOLO를 건너뛰는 프레임에서는 이전 바운딩 박스를 그대로 그림)
+        # 최신 프레임 결과 보존용 변수 (YOLO를 건너뛰는 프레임에서는 이전 바운딩 박스를 그대로 그림)
         self.last_results = None
 
         self.get_logger().info("✅ 전방 카메라 및 YOLO 프레임 스케줄러 노드가 가동되었습니다.")
@@ -48,33 +48,31 @@ class FrontCameraNode(Node):
             self.get_logger().error(f"이미지 변환 실패: {e}")
             return
 
-        # 🎯 [핵심 가드] 설정한 인터벌(0.2초)이 지나지 않았다면 무거운 YOLO 연산을 스킵합니다.
+        # 🎯 핵심 수정: YOLO를 실제로 돌릴 때만 블랙보드 상태를 갱신합니다.
         if (current_time - self.last_inference_time) >= self.inference_interval:
-            # CPU 전력 폭주를 막기 위해 명시적으로 device='cpu'를 지정하여 추론을 실행합니다.
             self.last_results = self.model(cv_image, verbose=False, conf=0.6, device='cpu')
-            self.last_inference_time = current_time # 타임스탬프 갱신
+            self.last_inference_time = current_time
 
-        # 블랙보드 플래그 및 카운터 초기화
-        self.blackboard.is_front_human = False
-        self.blackboard.front_obstacle_distance = 10.0
-        human_count = 0
+            # 🎯 YOLO 추론이 수행된 주기에만 플래그와 카운터를 초기화합니다.
+            # 이렇게 해야 다음 YOLO 연산이 돌기 전까지 True 상태가 유지됩니다!
+            self.blackboard.is_front_human = False
+            self.blackboard.front_obstacle_distance = 10.0
+            human_count = 0
 
-        # 유효한 추론 결과가 존재하는 경우 상태 판독 시작
-        if self.last_results and len(self.last_results) > 0 and len(self.last_results[0].boxes) > 0:
-            for box in self.last_results[0].boxes:
-                class_id = int(box.cls[0])
-                conf = float(box.conf[0])
-                name = self.model.names[class_id]
-                
-                if class_id == 0:
-                    human_count += 1
-                    self.blackboard.is_front_human = True
-                    self.blackboard.front_obstacle_distance = 0.4  
-                    self.get_logger().info(f"🔍 [YOLO 인물 감지]: {name}({conf*100:.1f}%) [현재 인원]: {human_count}", throttle_duration_sec=1.0)
+            if self.last_results and len(self.last_results) > 0 and len(self.last_results[0].boxes) > 0:
+                for box in self.last_results[0].boxes:
+                    class_id = int(box.cls[0])
+                    conf = float(box.conf[0])
+                    name = self.model.names[class_id]
+                    
+                    if class_id == 0:
+                        human_count += 1
+                        self.blackboard.is_front_human = True
+                        self.blackboard.front_obstacle_distance = 0.4  
+                        self.get_logger().info(f"🚨 [EMERGENCY] 전방 인물 감지!! 즉시 정지 플래그 작동: 현재 {human_count}명", throttle_duration_sec=0.5)
 
-        # OpenCV 이미지 압축 및 ROS2 토픽 토크 발행 레이어
+        # OpenCV 이미지 압축 및 토픽 발행 레이어 (기존과 동일)
         try:
-            # YOLO를 스킵한 프레임이라도 이전의 바운딩 박스 아웃라인 결과를 유지하여 시각화 품질을 방어합니다.
             if self.last_results and len(self.last_results) > 0:
                 annotated_frame = self.last_results[0].plot()
             else:
@@ -97,7 +95,7 @@ class FrontCameraNode(Node):
         # 하드웨어 무결성 플래그 터치
         self.blackboard.last_sensor_time = time.time()
         self.blackboard.sensor_timeout = False
-
+        
 def main(args=None):
     rclpy.init(args=args)
     class DummyBlackboard:

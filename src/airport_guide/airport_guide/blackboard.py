@@ -12,6 +12,9 @@ class Blackboard:
         self.last_sensor_time = time.time() # 센서(오도메트리 등)가 살아있는지 체크하는 시간 기록
         self.sensor_timeout = False       # 1초 이상 센서가 먹통이면 True가 되는 스위치
         
+        # 🎯 [추가] 웹 인터페이스 제어 플래그 (1.5번 웹 일시정지 브랜치와 연동)
+        self.is_paused = False            # 웹에서 일시정지를 누르면 True가 되는 스위치
+        
         # ----------------------------------------------------------------------
         # 2. 장애물 센싱 플래그 (라이다 및 AI 카메라 연동)
         # ----------------------------------------------------------------------
@@ -24,6 +27,10 @@ class Blackboard:
         self.is_front_human = False         # 전방 카메라에 사람이 잡혔는가?
         self.is_rear_human = False          # 후방 카메라에 사람이 잡혔는가?
 
+        # 🎯 [추가] 카메라 + 라이다 융합 판단 결과 플래그 (트리 2번, 4번과 연동)
+        self.is_dynamic_obstacle = False  # 전방에 움직이는 장애물(사람) 존재 여부
+        self.is_static_obstacle = False   # 전방에 멈춰있는 고정 장애물 존재 여부
+        
         # ----------------------------------------------------------------------
         # 3. 후방 사용자 추적(Human Tracking) 플래그
         # ----------------------------------------------------------------------
@@ -65,3 +72,22 @@ class Blackboard:
             self.goal_name = current_wp["name"]
             self.goal_x = current_wp["x"]
             self.goal_y = current_wp["y"]
+
+
+
+# 일시정지 선택 시 
+# shared_blackboard.is_paused = True
+# 경유지 유지 선택 시
+# shared_blackboard.is_paused = False
+# 경유지 수정 후 재개 선택 시 
+# shared_blackboard.goal_x = 새_X_좌표
+# shared_blackboard.goal_y = 새_Y_좌표
+# shared_blackboard.goal_name = "새목적지"
+# shared_blackboard.goal_sent = False  # 락 가드를 풀어야 6번 브랜치가 새 좌표를 Nav2로 쏩니다.
+# shared_blackboard.is_paused = False  # 일시정지 해제
+# 길찾기 종료 시 
+# shared_blackboard.has_goal = False
+# shared_blackboard.goal_sent = False
+# shared_blackboard.is_paused = False
+# 현업 가이드: 주행 중이던 Nav2 액션을 즉시 캔슬하기 위해 아래 명령을 웹 노드나 트리 노드에 연동하면 안전합니다.
+# bt_node.nav_client.cancel_goal_async()

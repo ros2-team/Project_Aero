@@ -84,22 +84,38 @@ class ActionSensorEmergencyStop(BTNode):
         ros_node.get_logger().error("⚠️ [CRITICAL] 센서 데이터 유실 감지! 시스템 정지 대기.", throttle_duration_sec=2.0)
         ros_node.publish_velocity(0.0, 0.0)
         return "RUNNING"
+    
+####### 1.5. 웹 인터페이스 강제 일시정지 브랜치 #######
+class ConditionWebPause(BTNode):
+    def tick(self, blackboard, ros_node):
+        # 🎯 웹 노드가 수신해서 blackboard.is_paused에 적어준 플래그를 검사합니다.
+        # 웹 노드에서 플래그를 생성하기 전 초기 상태(AttributeError)를 방지하기 위해 getattr 처리합니다.
+        if getattr(blackboard, 'is_paused', False):
+            return "SUCCESS"
+        return "FAILURE"
 
+class ActionWebPauseStop(BTNode):
+    def tick(self, blackboard, ros_node):
+        # 🎯 일시정지 상태가 유지되는 동안 바퀴 제어 속도를 0으로 강제 주입하여 락을 겁니다.
+        ros_node.get_logger().warn("⏸️ [WEB] 사용자가 웹에서 일시정지를 요청했습니다. 강제 정지 유지.", throttle_duration_sec=3.0)
+        ros_node.publish_velocity(0.0, 0.0)
+        return "RUNNING"
+    
 
-####### 2. 전방 충돌 방지 -> 전방 카메라 인지 및 비상정지 #######
+####### 2. 전방 충돌 방지 -> 동적 장애물(움직이는 사람)일 때 즉각 비상정지 #######
+# 팩트: 전방 카메라+라이다 노드가 실시간 계산한 'is_dynamic_obstacle'만 검사합니다.
 class ConditionEmergency(BTNode):
     def tick(self, blackboard, ros_node):
-        # 전방 카메라(YOLO) 인간 플래그 및 라이다 장애물 검출 플래그가 작동되면 넘김 
-        if blackboard.is_front_human or blackboard.obstacle_detected:
+        if blackboard.is_dynamic_obstacle:
             return "SUCCESS"
         return "FAILURE"
 
 class ActionEmergencyStop(BTNode):
     def tick(self, blackboard, ros_node):
-        # 비상 정지 상태 시 전방 장애가 완전 해제될 때까지 모터 출력을 0으로 강력 주입
-        ros_node.get_logger().error("[전방 위험] 비상 정지 조건 충족! 강제 정지.", throttle_duration_sec=1.0)
+        ros_node.get_logger().error("[전방 위험] 동적 장애물 감지! 강제 정지.", throttle_duration_sec=1.0)
         ros_node.publish_velocity(0.0, 0.0)
         return "RUNNING"
+
 
 ####### 3. 후방캠 사람 추적 및 낙오 방지 #######
 class ConditionHumanLost(BTNode):
@@ -111,7 +127,7 @@ class ConditionHumanLost(BTNode):
 
 class ActionSearchHuman(BTNode):
     def tick(self, blackboard, ros_node):
-        # 사용자 놓차면 무작정 전진하지 않고 주행을 즉시 멈춘 뒤 제자리에서 탐색 대기
+        # 사용자 놓치면 무작정 전진하지 않고 주행을 즉시 멈춘 뒤 제자리에서 탐색 대기
         ros_node.get_logger().error("❓ [안내 유실] 대상 재탐색 대기 모드.", throttle_duration_sec=3.0)
         ros_node.publish_velocity(0.0, 0.0) 
         return "RUNNING"
@@ -132,7 +148,7 @@ class ActionSignalToHuman(BTNode):
 
 
 ####### 4. 측후방 회피 시간 보장 브랜치 (장애물 우회 제어 레이어) #######
-# 라이다 사각지대나 측후방에 사물 발견 시, Nav2 내부 경로 생성기(Local Planner)가 방해받지 않고 스스로 우회하도록 시간을 주는 구역입니다.
+# 🎯 팩트: 전방 정적 장애물은 처리하지 않고 원래 의도대로 라이다 사각지대 및 측후방 사물만 전담 제어합니다.
 class ConditionObstacle(BTNode):
     def tick(self, blackboard, ros_node):
         # 라이다 기반 우회 경고 플래그 상태나 후방 위험 물체 거리(1.5m 이내)를 검사합니다.
@@ -142,11 +158,9 @@ class ConditionObstacle(BTNode):
 
 class ActionAvoidance(BTNode):
     def tick(self, blackboard, ros_node):
-        # 여기서는 속도 명령(publish_velocity)을 직접 내리지 않음.
         # 트리는 오직 상위 우선순위 영역에서 'RUNNING'만 리턴하여 하위의 목표 재전송 루프를 차단하고, Nav2가 유연하게 우회할 수 있도록 함.
-        ros_node.get_logger().info("🔄 [우회 제어] 사물(차량 등) 발견 영역 통과 중. Nav2 Local Planner 가동을 보장합니다.", throttle_duration_sec=2.0)
+        ros_node.get_logger().info("🔄 [우회 제어] 측후방 사물(차량 등) 발견 영역 통과 중. Nav2 Local Planner 가동을 보장합니다.", throttle_duration_sec=2.0)
         return "RUNNING"
-
 
 ####### 5. 경유지 도착 및 대기 제어 브랜치 #######
 # 독립 노드인 arrival_node와 연결 
@@ -221,6 +235,11 @@ class AirportGuideBT(Node):
         sensor_branch.add_child(ConditionSensorTimeout("SensorTimeout"))
         sensor_branch.add_child(ActionSensorEmergencyStop("SensorEStop"))
 
+        # 1.5번 웹 일시정지 브랜치 조립 추가
+        pause_branch = Sequence("WebPauseBranch")
+        pause_branch.add_child(ConditionWebPause("WebPause"))
+        pause_branch.add_child(ActionWebPauseStop("WebPauseStop"))
+
         emergency_branch = Sequence("EmergencyBranch")
         emergency_branch.add_child(ConditionEmergency("Emergency"))
         emergency_branch.add_child(ActionEmergencyStop("Stop"))
@@ -249,7 +268,8 @@ class AirportGuideBT(Node):
 
         # [우선순위 구조 기반 배치] Selector 노드의 우선순위 법칙
         self.root.add_child(battery_branch)        
-        self.root.add_child(sensor_branch)      
+        self.root.add_child(sensor_branch)     
+        self.root.add_child(pause_branch) 
         self.root.add_child(emergency_branch)   
         self.root.add_child(human_control_hub)        
         self.root.add_child(avoid_branch)       
