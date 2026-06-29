@@ -95,16 +95,32 @@ class ActionWebPauseStop(BTNode):
         return "RUNNING"
     
 
-####### 2. 전방 충돌 방지 -> 동적 장애물(움직이는 사람)일 때 즉각 비상정지 #######
+####### 2. 전방 충돌 방지 -> 사람이 가로막으면 무조건 정지 #######
 class ConditionEmergency(BTNode):
+    def __init__(self, name):
+        super().__init__(name)
+        # 🎯 이전 루프에서 사람이 있었는지 기억하는 내부 플래그
+        self.was_human_detected = False
+
     def tick(self, blackboard, ros_node):
-        if blackboard.is_dynamic_obstacle:
+        is_human = getattr(blackboard, 'is_front_human', False)
+        distance = getattr(blackboard, 'front_obstacle_distance', 10.0)
+
+        if is_human and distance <= 1.2:
+            self.was_human_detected = True
             return "SUCCESS"
+        
+        # 방금 전까지 사람이 가로막고 있다가 방금 막 사라진 타이밍(Edge 감지)
+        if self.was_human_detected and not is_human:
+            ros_node.get_logger().info("🏃‍♂️ 전방 사람이 비켜섰습니다. 주행 락을 해제하고 재출발합니다.")
+            blackboard.goal_sent = False  # 하단 내비게이션 주행 락 해제
+            self.was_human_detected = False  # 상태 초기화
+
         return "FAILURE"
 
 class ActionEmergencyStop(BTNode):
     def tick(self, blackboard, ros_node):
-        ros_node.get_logger().error("[전방 위험] 동적 장애물 감지! 강제 정지.", throttle_duration_sec=1.0)
+        ros_node.get_logger().error("[전방 위험] 사람이 경로를 막아 강제 정지합니다.", throttle_duration_sec=1.0)
         ros_node.publish_velocity(0.0, 0.0)
         return "RUNNING"
 
@@ -249,7 +265,7 @@ class AirportGuideBT(Node):
         self.input_thread = threading.Thread(target=self.terminal_input_loop, daemon=True)
         self.input_thread.start()
 
-    # 🎯 [수정 완료 구역] 터미널 입력 감시 루프 함수
+    # 터미널 입력 감시 루프 함수
     def terminal_input_loop(self):
         while rclpy.ok():
             user_input = input("\n[TEST INJECTION] 일시정지 하려면 'y', 해제하려면 'n'을 입력하세요: ").strip().lower()

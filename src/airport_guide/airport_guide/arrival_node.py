@@ -44,7 +44,7 @@ class ArrivalNode(Node):
         self.get_logger().info(f"🔍 [디버그] 목표: {self.blackboard.goal_name}, 남은거리: {distance:.3f}m", throttle_duration_sec=1.0)
 
         # 허용 반경 임계값 설정 (0.9m)
-        arrival_threshold = 1.0
+        arrival_threshold = 1.5
 
         # 2. 최초 도착 판단
         # 팩트: 아직 도착 플래그가 안 켜졌고 반경 이내로 들어왔다면 즉시 도착 스위치를 올리고 타이머를 가동합니다.
