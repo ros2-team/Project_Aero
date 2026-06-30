@@ -13,10 +13,10 @@ body {
     width: 100vw;
     height: 100vh;
     overflow: hidden;
-    background: #f7fbff;
+    background: #f8fbff;
 }
 
-/* 공항 배경 */
+/* 배경 */
 .background-layer {
     position: absolute;
     inset: 0;
@@ -29,17 +29,17 @@ body {
     z-index: 0;
 }
 
-/* 전체를 밝게 덮는 레이어 */
-.white-gradient-layer {
+/* 밝은 오버레이 */
+.white-layer {
     position: absolute;
     inset: 0;
 
     background:
         linear-gradient(
             180deg,
-            rgba(255, 255, 255, 0.96) 0%,
-            rgba(255, 255, 255, 0.92) 45%,
-            rgba(247, 251, 255, 0.88) 100%
+            rgba(255, 255, 255, 0.97) 0%,
+            rgba(255, 255, 255, 0.94) 48%,
+            rgba(247, 251, 255, 0.90) 100%
         );
 
     z-index: 1;
@@ -57,7 +57,7 @@ body {
     align-items: center;
     justify-content: space-between;
 
-    border-bottom: 1px solid rgba(210, 224, 246, 0.8);
+    border-bottom: 1px solid rgba(210, 224, 246, 0.85);
 }
 
 .logo-image {
@@ -67,9 +67,9 @@ body {
     display: block;
 }
 
-.header-empty {
-    width: 44px;
-    height: 44px;
+.header-space {
+    width: 120px;
+    height: 1px;
 }
 
 /* 본문 */
@@ -78,24 +78,30 @@ body {
     z-index: 2;
 
     height: calc(100vh - 92px);
+    padding: 38px 70px;
 
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
-.welcome-main {
+/* 좌우 병렬 레이아웃 */
+.welcome-layout {
     width: 100%;
-    max-width: 760px;
+    max-width: 1080px;
 
-    transform: translateY(-10px);
-
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr 0.78fr;
     align-items: center;
+    gap: 56px;
 }
 
-.welcome-main h1 {
+/* 왼쪽 */
+.welcome-left {
+    text-align: center;
+}
+
+.welcome-left h1 {
     margin: 0;
 
     color: #061b4e;
@@ -104,97 +110,125 @@ body {
     letter-spacing: -1.2px;
 }
 
-.welcome-main p {
-    margin: 18px 0 54px;
+.welcome-left > p {
+    margin: 20px 0 18px;
 
-    color: #2f3b52;
-    font-size: 20px;
+    color: #162957;
+    font-size: 22px;
+    line-height: 1.7;
     font-weight: 700;
-    letter-spacing: -0.3px;
+    letter-spacing: -0.5px;
 }
 
-/* 선택 버튼 */
-.choice-area {
+/* 로봇 영역 */
+.question-robot-area {
+    position: relative;
+
+    width: 390px;
+    height: 350px;
+    margin: 0 auto;
+
     display: flex;
-    gap: 26px;
+    align-items: center;
     justify-content: center;
 }
 
-.choice-button {
-    width: 240px;
-    height: 160px;
+.robot-circle {
+    position: absolute;
+    z-index: 1;
 
-    border-radius: 18px;
+    width: 270px;
+    height: 270px;
+    border-radius: 50%;
+
+    background: rgba(7, 93, 232, 0.10);
+}
+
+.question-robot-image {
+    position: relative;
+    z-index: 2;
+
+    width: 300px;
+    height: auto;
+    object-fit: contain;
+
+    filter: drop-shadow(0 16px 24px rgba(6, 27, 78, 0.12));
+}
+
+.question-mark {
+    position: absolute;
+    z-index: 3;
+
+    left: 28px;
+    top: 34px;
+
+    color: #0875ff;
+    font-size: 76px;
+    font-weight: 900;
+
+    text-shadow: 0 8px 18px rgba(7, 93, 232, 0.18);
+}
+
+/* 오른쪽 */
+.welcome-right {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+/* 선택 카드 */
+.choice-card {
+    width: 100%;
+    height: 112px;
+
+    border-radius: 16px;
     cursor: pointer;
 
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 18px;
 
-    font-size: 18px;
+    font-size: 19px;
     font-weight: 900;
 
-    box-shadow: 0 12px 28px rgba(6, 27, 78, 0.08);
+    box-shadow: 0 12px 26px rgba(6, 27, 78, 0.08);
 }
 
-.primary-choice {
+.choice-card:hover {
+    transform: translateY(-3px);
+    transition: 0.18s;
+}
+
+.primary-card {
     border: none;
     background: linear-gradient(135deg, #0875ff, #0054e3);
     color: white;
 }
 
-.secondary-choice {
+.secondary-card {
     border: 1px solid rgba(210, 224, 246, 0.95);
-    background: rgba(255, 255, 255, 0.94);
+    background: rgba(255, 255, 255, 0.96);
     color: #061b4e;
 }
 
-.choice-icon {
-    width: 52px;
-    height: 52px;
-
-    border-radius: 50%;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    font-size: 32px;
-    font-weight: 900;
+.choice-text {
+    letter-spacing: -0.4px;
 }
 
-.primary-choice .choice-icon {
-    background: rgba(255, 255, 255, 0.18);
-    color: white;
-}
-
-.secondary-choice .choice-icon {
-    border: 3px solid #0875ff;
-    color: #0875ff;
-}
-
-.choice-button:hover {
-    transform: translateY(-3px);
-    transition: 0.18s;
-}
-
-/* 하단 안내 박스 */
+/* 안내 박스 */
 .notice-box {
-    width: 560px;
-    height: 58px;
+    width: 100%;
+    min-height: 70px;
+    padding: 0 24px;
 
-    margin-top: 56px;
-
-    border-radius: 14px;
+    border-radius: 16px;
     border: 1px solid rgba(210, 224, 246, 0.95);
-    background: rgba(239, 246, 255, 0.9);
+    background: rgba(239, 246, 255, 0.78);
 
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 12px;
+    gap: 14px;
 
     color: #2f3b52;
     font-size: 16px;
@@ -204,8 +238,8 @@ body {
 }
 
 .notice-icon {
-    width: 24px;
-    height: 24px;
+    width: 32px;
+    height: 32px;
 
     border-radius: 50%;
     background: #0875ff;
@@ -215,12 +249,14 @@ body {
     align-items: center;
     justify-content: center;
 
-    font-size: 15px;
+    font-size: 18px;
     font-weight: 900;
+
+    flex-shrink: 0;
 }
 
 /* 작은 화면 */
-@media (max-width: 800px) {
+@media (max-width: 900px) {
     body {
         overflow: auto;
     }
@@ -239,43 +275,67 @@ body {
         width: 210px;
     }
 
+    .header-space {
+        width: 70px;
+    }
+
     .welcome-content {
         height: auto;
         min-height: calc(100vh - 80px);
-        padding: 60px 24px;
+        padding: 46px 24px;
     }
 
-    .welcome-main {
-        transform: none;
+    .welcome-layout {
+        grid-template-columns: 1fr;
+        gap: 24px;
     }
 
-    .welcome-main h1 {
+    .welcome-left h1 {
         font-size: 32px;
-        text-align: center;
     }
 
-    .welcome-main p {
-        margin: 14px 0 36px;
-        font-size: 17px;
-        text-align: center;
+    .welcome-left > p {
+        font-size: 18px;
     }
 
-    .choice-area {
-        width: 100%;
-        flex-direction: column;
-        gap: 16px;
+    .question-robot-area {
+        width: 300px;
+        height: 240px;
     }
 
-    .choice-button {
-        width: 100%;
-        height: 120px;
+    .question-robot-image {
+        width: 220px;
+    }
+
+    .robot-circle {
+        width: 210px;
+        height: 210px;
+    }
+
+    .question-mark {
+        left: 20px;
+        top: 18px;
+        font-size: 58px;
+    }
+
+    .choice-card {
+        height: 118px;
+        font-size: 19px;
+    }
+
+    .choice-icon {
+        font-size: 42px;
+    }
+
+    .close-circle {
+        width: 50px;
+        height: 50px;
+        font-size: 34px;
     }
 
     .notice-box {
-        width: 100%;
-        height: auto;
-        min-height: 58px;
-        padding: 14px 18px;
-        text-align: center;
+        min-height: 72px;
+        padding: 16px 20px;
+        font-size: 16px;
     }
 }

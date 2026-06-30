@@ -13,11 +13,10 @@
     <div class="welcome-page">
 
         <div class="background-layer"></div>
-        <div class="white-gradient-layer"></div>
+        <div class="white-layer"></div>
 
         <header class="welcome-header">
-
-            <div class="header-empty"></div>
+            <div class="header-space"></div>
 
             <img
                 class="logo-image"
@@ -25,47 +24,64 @@
                 alt="AIRPORT GUIDE ROBOT"
             >
 
-            <div class="header-empty"></div>
-
+            <div class="header-space"></div>
         </header>
 
         <main class="welcome-content">
 
-            <section class="welcome-main">
+            <section class="welcome-layout">
 
-                <h1>
-                    안내가 필요하신가요?
-                </h1>
+                <div class="welcome-left">
 
-                <p>
-                    필요하시면 아래 버튼을 눌러주세요.
-                </p>
+                    <h1>길을 잘 모르시겠나요?</h1>
 
-                <div class="choice-area">
+                    <p>
+                        어디로 가야 할지 고민되신다면,<br>
+                        제가 친절하게 안내해드릴게요!
+                    </p>
 
-                    <button
-                        class="choice-button primary-choice"
-                        onclick="location.href='/destination'"
-                    >
-                        <div class="choice-icon">✈</div>
-                        <span>예, 안내가 필요해요</span>
-                    </button>
+                    <div class="question-robot-area">
 
-                    <button
-                        class="choice-button secondary-choice"
-                        onclick="location.href='/idle'"
-                    >
-                        <div class="choice-icon">×</div>
-                        <span>아니요, 괜찮아요</span>
-                    </button>
+                        <div class="question-mark">?</div>
+
+                        <div class="robot-circle"></div>
+
+                        <img
+                            class="question-robot-image"
+                            src="{{ url_for('static', filename='img/ui/curios.png') }}"
+                            alt="안내 로봇"
+                        >
+
+                    </div>
 
                 </div>
 
-                <div class="notice-box">
-                    <div class="notice-icon">i</div>
-                    <span>
-                        원하시는 목적지로 안전하게 안내해 드릴게요.
-                    </span>
+                <div class="welcome-right">
+
+                    <button
+                        class="choice-card primary-card"
+                        onclick="location.href='/destination'"
+                    >
+                        <div class="choice-text">네, 안내가 필요해요</div>
+                    </button>
+
+                    <button
+                        class="choice-card secondary-card"
+                        onclick="location.href='/idle'"
+                    >
+                        <div class="choice-text">아니요, 괜찮아요</div>
+                    </button>
+
+                    <div class="notice-box">
+
+                        <div class="notice-icon">i</div>
+
+                        <span>
+                            원하시는 목적지로 안전하게 안내해 드릴게요.
+                        </span>
+
+                    </div>
+
                 </div>
 
             </section>

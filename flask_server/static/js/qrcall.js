@@ -5,9 +5,11 @@ callRobotButton.addEventListener("click", () => {
     const location = callRobotButton.dataset.location;
 
     callRobotButton.disabled = true;
-    callRobotButton.innerText = "호출 중...";
-    callResult.className = "call-result";
-    callResult.innerText = "로봇 호출 요청을 보내는 중입니다.";
+    callRobotButton.innerHTML = "호출 중...";
+
+    callResult.className = "";
+    callResult.innerHTML =
+        "로봇 호출 요청을 보내는 중입니다.<br>잠시만 기다려 주세요.";
 
     fetch("/call_robot", {
         method: "POST",
@@ -21,22 +23,28 @@ callRobotButton.addEventListener("click", () => {
     .then(response => response.json())
     .then(data => {
         if (data.success === true) {
-            callResult.className = "call-result success";
-            callResult.innerText = "로봇 호출이 완료되었습니다. 잠시만 기다려주세요.";
-            callRobotButton.innerText = "호출 완료";
+            callResult.className = "success";
+            callResult.innerHTML =
+                "로봇이 호출 위치로 이동 중입니다.<br>잠시만 기다려 주세요.";
+
+            callRobotButton.innerHTML = "호출 완료";
         } else {
-            callResult.className = "call-result error";
-            callResult.innerText = "로봇 호출에 실패했습니다. 다시 시도해주세요.";
+            callResult.className = "error";
+            callResult.innerHTML =
+                "로봇 호출에 실패했습니다.<br>다시 시도해주세요.";
+
             callRobotButton.disabled = false;
-            callRobotButton.innerText = "로봇 호출하기";
+            callRobotButton.innerHTML = "로봇 호출하기";
         }
     })
     .catch(error => {
         console.error(error);
 
-        callResult.className = "call-result error";
-        callResult.innerText = "서버 통신 중 오류가 발생했습니다.";
+        callResult.className = "error";
+        callResult.innerHTML =
+            "서버 통신 중 오류가 발생했습니다.<br>다시 시도해주세요.";
+
         callRobotButton.disabled = false;
-        callRobotButton.innerText = "로봇 호출하기";
+        callRobotButton.innerHTML = "로봇 호출하기";
     });
 });

@@ -52,35 +52,19 @@ body {
     justify-content: space-between;
 }
 
-.roaming-badge {
-    height: 46px;
-    padding: 0 22px;
-    border-radius: 16px;
-
-    background: linear-gradient(135deg, #0b74ff, #0052df);
-    color: white;
-
-    display: flex;
-    align-items: center;
-    gap: 8px;
-
-    font-size: 20px;
-    font-weight: 900;
-
-    box-shadow: 0 8px 20px rgba(0, 89, 216, 0.22);
-}
-
-.badge-icon {
-    font-size: 19px;
-}
-
 .header-logo {
     width: 300px;
     height: auto;
     object-fit: contain;
     display: block;
 }
+
 .header-right-space {
+    width: 120px;
+    height: 1px;
+}
+
+.header-empty{
     width: 120px;
     height: 1px;
 }
@@ -272,17 +256,6 @@ body {
     .header-logo {
         height: 42px;
     }
-
-    .roaming-badge {
-        height: 40px;
-        padding: 0 16px;
-        font-size: 15px;
-    }
-
-    .wifi-icon {
-        font-size: 36px;
-    }
-
     .idle-main {
         height: auto;
         padding: 26px 28px 0;

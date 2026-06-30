@@ -6,77 +6,98 @@
     <title>로봇 호출</title>
     <link rel="icon" href="data:,">
 
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/qrcall.css') }}">
 </head>
 
 <body>
-    <div class="app-page">
-        <div class="screen">
+    <div class="qrcall-page">
 
-            <header class="top-bar">
-                <div class="top-action"></div>
+        <div class="background-layer"></div>
+        <div class="white-layer"></div>
 
-                <div class="brand">
-                    <span class="brand-icon">🤖</span>
-                    <span>AIRPORT GUIDE ROBOT</span>
-                </div>
+        <header class="qrcall-header">
+            <div class="header-space"></div>
 
-                <div class="top-action"></div>
-            </header>
+            <img
+                class="logo-image"
+                src="{{ url_for('static', filename='img/ui/logo.png') }}"
+                alt="AIRPORT GUIDE ROBOT"
+            >
 
-            <main class="qrcall-page">
+            <div class="header-space"></div>
+        </header>
 
-                <section class="qrcall-card card">
+        <main class="qrcall-content">
 
-                    <div class="call-icon">
-                        📱
-                    </div>
+            <section class="qrcall-layout">
 
-                    <span class="call-badge">
-                        QR 호출
-                    </span>
+                <div class="qrcall-left">
 
-                    <h1>
-                        로봇을 호출하시겠습니까?
-                    </h1>
+                    <h1>길을 찾기 어려우신가요?</h1>
 
                     <p>
-                        현재 위치로 안내 로봇을 호출합니다.<br>
-                        로봇이 도착하면 화면에서 목적지를 선택할 수 있습니다.
+                        로봇을 호출하면 지금 계신 위치로 이동하여<br>
+                        안내해 드릴게요!
                     </p>
 
-                    <div class="location-box">
-                        <div class="location-label">현재 호출 위치</div>
-                        <div class="location-value" id="locationValue">
-                            {{ location }}
+                    <div class="call-robot-area">
+                        <div class="question-mark">?</div>
+
+                        <div class="robot-circle"></div>
+
+                        <img
+                            class="call-robot-image"
+                            src="{{ url_for('static', filename='img/ui/curios.png') }}"
+                            alt="로봇 호출"
+                        >
+                    </div>
+
+                </div>
+
+                <div class="qrcall-right">
+
+                    <div class="call-card">
+
+                        <div class="location-label">현재 위치</div>
+
+                        <div class="location-select">
+                            <span class="location-icon">📍</span>
+                            <span id="locationValue">{{ location }}</span>
+                        </div>
+
+                        <button
+                            class="call-button"
+                            id="callRobotButton"
+                            data-location="{{ location }}"
+                        >
+                            로봇 호출하기
+                        </button>
+
+                    </div>
+
+                    <div class="info-box">
+                        <div>
+                            <strong>안내</strong>
+                            <p id="callResult">
+                                로봇을 호출하면 현재 위치로 이동합니다.<br>
+                                호출 버튼을 눌러주세요.
+                            </p>
+                        </div>
+
+                        <div class="mini-robot-icon">
+                            <img
+                                src="{{ url_for('static', filename='img/ui/mark.png') }}"
+                                alt="안내 로봇 마크"
+                            >
                         </div>
                     </div>
 
-                    <button
-                        class="primary-btn call-btn"
-                        id="callRobotButton"
-                        data-location="{{ location }}"
-                    >
-                        로봇 호출하기
-                    </button>
+                </div>
 
-                    <button
-                        class="secondary-btn back-btn"
-                        onclick="history.back()"
-                    >
-                        이전 화면
-                    </button>
+            </section>
 
-                    <div class="call-result" id="callResult">
-                        호출 대기 중입니다.
-                    </div>
+        </main>
 
-                </section>
-
-            </main>
-
-        </div>
     </div>
 
     <script src="{{ url_for('static', filename='js/qrcall.js') }}"></script>
