@@ -183,13 +183,6 @@
     font-weight: 900;
 }
 
-.selected-status {
-    margin-top: 4px;
-    color: var(--text-sub);
-    font-size: 12px;
-    font-weight: 700;
-}
-
 .selected-actions {
     display: flex;
     align-items: center;

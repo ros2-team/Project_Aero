@@ -142,9 +142,6 @@ function renderRoute() {
                         ${getPlaceIcon(place.location_code, place.location_name)}
                         ${place.location_name}
                     </div>
-                    <div class="selected-status">
-                        ${index === 0 ? "첫 번째 안내 목적지" : "대기 중"}
-                    </div>
                 </div>
 
                 <div class="selected-actions">
