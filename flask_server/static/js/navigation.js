@@ -9,6 +9,8 @@ const changeRouteButton = document.getElementById("changeRouteButton");
 const continueButton = document.getElementById("continueButton");
 const stopServiceButton = document.getElementById("stopServiceButton");
 
+let isPaused = false;
+
 
 function renderRouteList() {
     const savedRoute = localStorage.getItem("navigationRoute");
@@ -52,32 +54,86 @@ function setSocketDummyState() {
 }
 
 
-function openPauseModal() {
-    pauseModal.classList.add("show");
+function setPauseButtonText(paused) {
+    if (!pauseButton) {
+        return;
+    }
 
-    // 나중에 여기서 ROS2 일시정지 API 호출 예정
-    // fetch("/api/navigation/pause", { method: "POST" });
+    if (paused) {
+        pauseButton.innerText = "▶ 계속";
+    } else {
+        pauseButton.innerText = "⏸ 일시정지";
+    }
 }
 
 
-function closePauseModal() {
-    pauseModal.classList.remove("show");
+async function postNavigationApi(url) {
+    const response = await fetch(url, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        }
+    });
 
-    // 나중에 여기서 ROS2 재개 API 호출 예정
-    // fetch("/api/navigation/resume", { method: "POST" });
+    const data = await response.json();
+
+    if (data.status !== "success") {
+        throw new Error(data.message || "navigation api failed");
+    }
+
+    return data;
+}
+
+
+async function openPauseModal() {
+    try {
+        await postNavigationApi("/api/navigation/pause");
+
+        isPaused = true;
+        setPauseButtonText(true);
+
+        pauseModal.classList.add("show");
+    } catch (error) {
+        console.error(error);
+        alert("일시정지 요청 중 오류가 발생했습니다.");
+    }
+}
+
+
+async function closePauseModal() {
+    try {
+        await postNavigationApi("/api/navigation/resume");
+
+        isPaused = false;
+        setPauseButtonText(false);
+
+        pauseModal.classList.remove("show");
+    } catch (error) {
+        console.error(error);
+        alert("안내 재개 요청 중 오류가 발생했습니다.");
+    }
 }
 
 
 pauseButton.addEventListener("click", () => {
+    if (isPaused) {
+        pauseModal.classList.add("show");
+        return;
+    }
+
     openPauseModal();
 });
 
 
-changeRouteButton.addEventListener("click", () => {
-    // 나중에 여기서 기존 goal 취소 API 호출 예정
-    // fetch("/api/navigation/cancel", { method: "POST" });
+changeRouteButton.addEventListener("click", async () => {
+    try {
+        await postNavigationApi("/api/navigation/stop");
 
-    location.href = "/destination";
+        location.href = "/destination";
+    } catch (error) {
+        console.error(error);
+        alert("경로 변경 요청 중 오류가 발생했습니다.");
+    }
 });
 
 
@@ -86,13 +142,17 @@ continueButton.addEventListener("click", () => {
 });
 
 
-stopServiceButton.addEventListener("click", () => {
-    localStorage.removeItem("navigationRoute");
+stopServiceButton.addEventListener("click", async () => {
+    try {
+        localStorage.removeItem("navigationRoute");
 
-    // 나중에 여기서 기존 goal 취소 + 로밍 복귀 API 호출 예정
-    // fetch("/api/navigation/stop", { method: "POST" });
+        await postNavigationApi("/api/navigation/stop");
 
-    location.href = "/idle";
+        location.href = "/idle";
+    } catch (error) {
+        console.error(error);
+        alert("이용 중지 요청 중 오류가 발생했습니다.");
+    }
 });
 
 
@@ -105,3 +165,4 @@ pauseModal.addEventListener("click", (event) => {
 
 renderRouteList();
 setSocketDummyState();
+setPauseButtonText(false);

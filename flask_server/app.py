@@ -1,7 +1,6 @@
 
 #   library     ---------------------------------------------------------------------------------------------
 
-import subprocess
 from flask import Flask
 from flask import render_template
 from flask import request
@@ -12,31 +11,52 @@ from database.database import get_db_connection
 from database.database import get_locations
 from database.location import get_location_by_code
 
-#   function    ---------------------------------------------------------------------------------------------
-def send_route_to_ros2(navigation_route):
-    args = []
-    for target in navigation_route:
-        args.append(str(target["x"]))
-        args.append(str(target["y"]))
-        args.append(str(target["yaw"]))
-    
-    ros_args = " ".join(args)
-
-    command = f"""
-    source /opt/ros/humble/setup.bash &&
-    source /home/celestial/projectAR/ros2_ws/install/setup.bash &&
-    ros2 run guide_robot navigation_server {ros_args}
-    """
-    subprocess.Popen(
-        ["bash", "-c", command]
-    )
-
 #   flask init     ---------------------------------------------------------------------------------------------    
 app = Flask(__name__)
 socketio = SocketIO(
     app,
     cors_allowed_origins = "*"
 )
+
+navigation_state = {
+    "status" : "idle",
+    "type" : None,
+    "route" : [],
+    "current_index" : 0,
+    "is_paused" : False
+}
+
+#   function    ---------------------------------------------------------------------------------------------
+def send_route_to(route_type, navigation_route):
+    payload = {
+        "type": route_type,
+        "route": navigation_route
+    }
+
+    navigation_state["status"] = "moving"
+    navigation_state["type"] = route_type
+    navigation_state["route"] = navigation_route
+    navigation_state["current_index"] = 0
+    navigation_state["is_paused"] = False
+
+    print("\n로봇 행동트리로 전달할 payload")
+    print(f"type: {payload['type']}")
+
+    for target in payload["route"]:
+        print(
+            f"{target['order']}. "
+            f"{target['location_name']} "
+            f"({target['location_code']}) "
+            f"x={target['x']}, "
+            f"y={target['y']}, "
+            f"yaw={target['yaw']}"
+        )
+
+    return payload
+
+    # 팀원 행동트리 연동 방식 확정 후 이곳에 연결 검색용)extention_port
+
+
 
 #   flask socketio    ---------------------------------------------------------------------------------------------    
 @socketio.on("connect")
@@ -101,49 +121,47 @@ def finish():
 @app.route("/qrcall")
 def qrcall():
 
-    location = request.args.get("location", "unknown")
-    
+    location_code = request.args.get(
+        "location",
+        "unknown"
+    )
+
+    location = get_location_by_code(location_code)
+
+    if location:
+        location_name = location["location_name"]
+    else:
+        location_name = "알 수 없는 위치"
+
     return render_template(
         "qrcall.html",
-        location=location
+        location_code=location_code,
+        location_name=location_name
     )
-# QR 로봇 호출
-@app.route("/call_robot", methods = ["POST"])
-def call_robot():
-    try:
-        data = request.get_json()
-        location = data["location"]
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            """ 
-            insert into call_history(location_code)
-            values(%s)
-            """, 
-            (location,)
-        )
-        conn.commit()
-        cursor.close()
-        conn.close()
-        
-        return jsonify({
-            "success" : True
-        })
-    except Exception as e:
-        print(e)
-        return jsonify({
-            "success" : False
-        }), 500
 #   api     ---------------------------------------------------------------------------------------------
 @app.route("/api/locations")
 def api_locations():
     locations = get_locations()
     return jsonify(locations)
 
+@app.route("/api/navigation/state")
+def get_navigation_state():
+    return jsonify({
+        "status" : "success",
+        "navigation_state" : navigation_state
+    })
+
 @app.route("/api/navigation/start", methods = ["POST"])
 def start_navigation():
+    
     request_data = request.get_json()
+    if not request_data:
+        return jsonify({
+            "status" : "error",
+            "message" : "경로 데이터가 없습니다"
+        }),400
+
     print("수신 데이터")
     print(request_data)
     
@@ -169,18 +187,129 @@ def start_navigation():
     for route in navigation_route:
         print(route)
 
-    send_route_to_ros2(navigation_route)
+    send_route_to("navigation_route", navigation_route)
 
     return jsonify({
         "status" : "success",
         "message" : "Ros2 navigation route sent",
         "route" : navigation_route
     })
+@app.route("/api/navigation/pause", methods=["POST"])
+def pause_navigation():
+    print("navigation pause request")
     
+    navigation_state["status"] = "paused"
+    navigation_state["is_paused"] = True
+
+    # Ros2 Nav2 정지 명령 연결
+    return jsonify({
+        "status" : "success",
+        "message" : "navigation paused",
+        "navigation_state" : navigation_state
+    })
+
+@app.route("/api/navigation/resume", methods=["POST"])
+def resume_navigation():
+    print("navigation resume request")
+
+    navigation_state["status"] = "moving"
+    navigation_state["is_paused"] = False
+
+    # Ros2 Nav2 계속 명령 연결
+    return jsonify({
+        "status" : "success",
+        "message" : "navigation resumed",
+        "navigation_state" : navigation_state
+    })
+
+@app.route("/api/navigation/stop", methods=["POST"])
+def stop_navigation():
+    print("navigation stop request")
+    
+    navigation_state["status"] = "stopped"
+    navigation_state["type"] = None
+    navigation_state["route"] = []
+    navigation_state["current_index"] = 0
+    navigation_state["is_paused"] = False
+
+    #Ros2 Nav2 취소 명령 연결
+    return jsonify({
+        "status" : "success",
+        "message" : "navigation stopped",
+        "navigation_state" : navigation_state
+    })
+
+@app.route("/api/qrcall/callrobot", methods = ["POST"])
+def callrobot_qrcall():
+    try:
+        data = request.get_json()
+
+        location_code = data.get("location")
+
+        if not location_code:
+            return jsonify({
+                "success" : False,
+                "message" : "location 값이 없습니다."
+            }), 400
+
+        location = get_location_by_code(location_code)
+
+        if not location:
+            return jsonify({
+                "success" : False,
+                "message" : "등록되지 않은 위치입니다."
+            }), 404
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            insert into call_history(location_code)
+            values(%s)
+            """,
+            (location_code,)
+        )
+
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+
+        qr_route = [
+            {
+                "order" : 1,
+                "location_code" : location["location_code"],
+                "location_name" : location["location_name"],
+                "x" : location["pos_x"],
+                "y" : location["pos_y"],
+                "yaw" : location["yaw"]
+            }
+        ]
+
+        send_route_to("qrcall", qr_route)
+
+        return jsonify({
+            "success" : True,
+            "message" : "robot call saved"
+        })
+
+    except Exception as e:
+        print(e)
+
+        return jsonify({
+            "success" : False,
+            "message" : "server error"
+        }), 500
+    
+
+
+
 if __name__ == "__main__":
     socketio.run(
         app,
         host="0.0.0.0",
         port=5000,
-        debug=True
+        debug=True,
+        use_reloader=False
     )
