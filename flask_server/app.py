@@ -92,7 +92,7 @@ def navigation():
         location_code=location_code
     )
 
-# 안내 완료
+# 안내 완료 #
 @app.route("/finish")
 def finish():
     return render_template("finish.html")

@@ -3,18 +3,88 @@ let routeQueue = [];
 
 // 화면 초기화
 function init() {
-    const placeListEl = document.getElementById("placeList");
-    placeListEl.innerHTML = PLACE_DATA.map(place => `
-        <li class="item">
-            <div>
-                <strong>${place.location_name}</strong> <br>
-                <small style="color:#888;">X: ${place.pos_x}, Y: ${place.pos_y}</small>
-            </div>
-            <button class="btn-add" onclick="addRoute('${place.location_code}')">추가</button>
-        </li>
-    `).join('');
+    renderPlaceList(PLACE_DATA);
+    renderRoute();
+    bindSearchEvent();
 }
 
+function getPlaceIcon(locationCode, locationName) {
+    if (locationCode.includes("gate")) {
+        return "✈️";
+    }
+
+    if (locationName.includes("화장실")) {
+        return "🚻";
+    }
+
+    if (locationName.includes("식당")) {
+        return "🍴";
+    }
+
+    if (locationName.includes("카페")) {
+        return "☕";
+    }
+
+    if (locationName.includes("안내")) {
+        return "ℹ️";
+    }
+
+    if (locationName.includes("수하물")) {
+        return "🧳";
+    }
+
+    if (locationName.includes("충전")) {
+        return "🔋";
+    }
+
+    return "📍";
+}
+
+function renderPlaceList(list) {
+    const placeListEl = document.getElementById("placeList");
+
+    placeListEl.innerHTML = list.map(place => `
+        <li class="place-item">
+            <div class="place-icon">
+                ${getPlaceIcon(place.location_code, place.location_name)}
+            </div>
+
+            <div class="place-info">
+                <div class="place-name">${place.location_name}</div>
+                <div class="place-code">${place.location_code}</div>
+            </div>
+
+            <button
+                class="place-add-btn"
+                type="button"
+                onclick="addRoute('${place.location_code}')"
+            >
+                +
+            </button>
+        </li>
+    `).join("");
+}
+
+function bindSearchEvent() {
+    const searchInput = document.getElementById("destinationSearch");
+
+    if (!searchInput) {
+        return;
+    }
+
+    searchInput.addEventListener("input", () => {
+        const keyword = searchInput.value.trim().toLowerCase();
+
+        const filteredList = PLACE_DATA.filter(place => {
+            return (
+                place.location_name.toLowerCase().includes(keyword) ||
+                place.location_code.toLowerCase().includes(keyword)
+            );
+        });
+
+        renderPlaceList(filteredList);
+    });
+}
 function addRoute(locationCode) {
     const targetPlace = PLACE_DATA.find(p => p.location_code === locationCode);
     if (!targetPlace) return;
@@ -49,34 +119,62 @@ function moveDown(index) {
 
 function renderRoute() {
     const selectedListEl = document.getElementById("selectedList");
+
     if (routeQueue.length === 0) {
-        selectedListEl.innerHTML = `<li style="color:#aaa; text-align:center; margin-top:20px;">선택된 장소가 없습니다.</li>`;
+        selectedListEl.innerHTML = `
+            <li class="empty-selected">
+                선택된 목적지가 없습니다.<br>
+                왼쪽 목록에서 목적지를 추가해주세요.
+            </li>
+        `;
         return;
     }
 
     selectedListEl.innerHTML = routeQueue.map((place, index) => {
-        let statusColor = "#666"; 
-        if (place.status === "finish") statusColor = "#4caf50"; 
-        const isFinished = place.status === "finish";
-
         return `
-            <li class="item selected-item" style="${isFinished ? 'background:#e8f5e9; border-color:#a5d6a7; opacity: 0.8;' : ''}">
-                <div>
-                    <strong>${index + 1}. ${place.location_name}</strong> 
-                    <span style="color: ${statusColor}; font-weight: bold; margin-left: 10px;">
-                        [${place.status || 'pending'}]
-                    </span>
-                    <br>
-                    <small style="color:#666;">(X: ${place.pos_x}, Y: ${place.pos_y})</small>
+            <li class="selected-item">
+                <div class="selected-order">
+                    ${index + 1}
                 </div>
-                <div class="btn-group">
-                    <button onclick="moveUp(${index})" ${isFinished ? 'disabled' : ''}>▲</button>
-                    <button onclick="moveDown(${index})" ${isFinished ? 'disabled' : ''}>▼</button>
-                    <button class="btn-delete" onclick="deleteRoute(${place.instanceId})" ${isFinished ? 'disabled' : ''}>삭제</button>
+
+                <div>
+                    <div class="selected-name">
+                        ${getPlaceIcon(place.location_code, place.location_name)}
+                        ${place.location_name}
+                    </div>
+                    <div class="selected-status">
+                        ${index === 0 ? "첫 번째 안내 목적지" : "대기 중"}
+                    </div>
+                </div>
+
+                <div class="selected-actions">
+                    <button
+                        class="small-btn"
+                        type="button"
+                        onclick="moveUp(${index})"
+                    >
+                        ↑
+                    </button>
+
+                    <button
+                        class="small-btn"
+                        type="button"
+                        onclick="moveDown(${index})"
+                    >
+                        ↓
+                    </button>
+
+                    <button
+                        class="small-btn delete"
+                        type="button"
+                        onclick="deleteRoute(${place.instanceId})"
+                    >
+                        ×
+                    </button>
                 </div>
             </li>
         `;
-    }).join('');
+    }).join("");
 }
 
 // 완료된 장소는 제외하고 아직 방문하지 않은 경유지만 필터링하여 전송하는 함수
@@ -109,10 +207,16 @@ function startNavigation() {
     .then(response => response.json())
     .then(data => {
         console.log("서버 응답:", data);
+        
         if (data.status === "success") {
+            localStorage.setItem(
+                "navigationRoute",
+                JSON.stringify(data.route)
+            );
             const firstDestination = data.route[0].location_name;
             const firstLocationCode = data.route[0].location_code;
-            location.href = '/navigation?destination=${encodeURIComponent(firstDestination)}&location_code=${encodeURIComponent(firstLocationCode)}';    
+            location.href =
+                `/navigation?destination=${encodeURIComponent(firstDestination)}&location_code=${encodeURIComponent(firstLocationCode)}`;    
         } 
         else {
             alert("경로 전송 실패: " + data.message);

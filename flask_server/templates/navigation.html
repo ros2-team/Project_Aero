@@ -6,235 +6,136 @@
     <title>길 안내 중</title>
     <link rel="icon" href="data:,">
 
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: Arial, sans-serif;
-            background: #f4f6f8;
-            color: #222;
-        }
-
-        .page {
-            width: 100%;
-            min-height: 100vh;
-        }
-
-        .header {
-            width: 100%;
-            padding: 30px 0;
-            background: #1f2937;
-            color: white;
-            text-align: center;
-        }
-
-        .header h1 {
-            margin: 0;
-            font-size: 38px;
-        }
-
-        .header p {
-            margin: 12px 0 0 0;
-            font-size: 22px;
-            color: #d1d5db;
-        }
-
-        .content {
-            width: 90%;
-            max-width: 1100px;
-            margin: 30px auto 0 auto;
-            display: flex;
-            gap: 24px;
-        }
-
-        .panel {
-            background: white;
-            border-radius: 18px;
-            padding: 24px;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-        }
-
-        .map-panel {
-            flex: 2;
-        }
-
-        .status-panel {
-            flex: 1;
-        }
-
-        .panel-title {
-            font-size: 24px;
-            font-weight: bold;
-            margin-bottom: 18px;
-        }
-
-        .map-image {
-            width: 100%;
-            border-radius: 14px;
-            border: 1px solid #ddd;
-        }
-
-        .no-map {
-            padding: 80px 0;
-            text-align: center;
-            color: #777;
-            background: #f3f4f6;
-            border-radius: 14px;
-        }
-
-        .status-box {
-            padding: 18px;
-            border-radius: 14px;
-            background: #eff6ff;
-            border: 1px solid #bfdbfe;
-            margin-bottom: 18px;
-        }
-
-        .status-label {
-            font-size: 16px;
-            color: #555;
-            margin-bottom: 8px;
-        }
-
-        .status-value {
-            font-size: 25px;
-            font-weight: bold;
-            color: #1d4ed8;
-        }
-
-        .guide-message {
-            font-size: 20px;
-            line-height: 1.6;
-            padding: 18px;
-            border-radius: 14px;
-            background: #f9fafb;
-            border: 1px solid #e5e7eb;
-        }
-
-        .button-area {
-            width: 90%;
-            max-width: 1100px;
-            margin: 26px auto 0 auto;
-            display: flex;
-            justify-content: center;
-            gap: 16px;
-        }
-
-        button {
-            border: none;
-            border-radius: 14px;
-            padding: 16px 32px;
-            font-size: 20px;
-            cursor: pointer;
-        }
-
-        .btn-cancel {
-            background: #ef4444;
-            color: white;
-        }
-
-        .btn-finish {
-            background: #2563eb;
-            color: white;
-        }
-
-        .btn-home {
-            background: #6b7280;
-            color: white;
-        }
-
-        @media (max-width: 800px) {
-            .content {
-                flex-direction: column;
-            }
-
-            .header h1 {
-                font-size: 30px;
-            }
-
-            .header p {
-                font-size: 18px;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/navigation.css') }}">
 </head>
 
 <body>
-    <div class="page">
+    <div class="app-page">
+        <div class="screen">
 
-        <div class="header">
-            <h1>🚗 길 안내 중</h1>
-            <p>
-                <span id="destinationName">{{ destination }}</span>
-                방향으로 이동 중입니다
-            </p>
-        </div>
+            <header class="top-bar">
 
-        <div class="content">
+                <div class="top-action"></div> 
 
-            <div class="panel map-panel">
-                <div class="panel-title">목적지 약도</div>
+                <img
+                    class="page-logo"
+                    src="{{ url_for('static', filename='img/ui/logo.png') }}"
+                    alt="AIRPORT GUIDE ROBOT"
+                >
 
-                {% if location_code != "unknown" %}
-                    <img
-                        class="map-image"
-                        id="mapImage"
-                        src="{{ url_for('static', filename='img/pos_img/' + location_code + '.png') }}"
-                        alt="목적지 약도"
-                    >
-                {% else %}
-                    <div class="no-map">
-                        목적지 약도 정보가 없습니다.
+                <button class="pause-btn" id="pauseButton">
+                    ⏸ 일시정지
+                </button>
+            </header>
+
+            <main class="navigation-layout">
+
+                <aside class="route-panel">
+
+                    <h2 class="side-title">안내 경로</h2>
+
+                    <div class="route-list" id="routeList">
+                        <div class="route-item active">
+                            <div class="route-index">1</div>
+                            <div class="route-info">
+                                <div class="route-name">{{ destination }}</div>
+                                <div class="route-status">이동 중</div>
+                            </div>
+                        </div>
                     </div>
-                {% endif %}
+
+                    <div class="summary-card">
+                        <div class="summary-row">
+                            <span>전체 거리</span>
+                            <strong id="totalDistance">약 350 m</strong>
+                        </div>
+
+                        <div class="summary-row">
+                            <span>예상 시간</span>
+                            <strong id="estimatedTime">약 4분</strong>
+                        </div>
+                    </div>
+
+                </aside>
+
+                <section class="map-panel">
+
+                    <div class="navigation-title-area">
+                        <h1>
+                            <span id="currentTarget">{{ destination }}</span>
+                            안내 중입니다.
+                        </h1>
+                        <p>안전을 위해 로봇을 따라와 주세요.</p>
+                    </div>
+
+                    <div class="map-card">
+
+                        {% if location_code != "unknown" %}
+                            <img
+                                class="map-image"
+                                id="mapImage"
+                                src="{{ url_for('static', filename='img/pos_img/' + location_code + '.png') }}"
+                                alt="목적지 약도"
+                            >
+                        {% else %}
+                            <div class="empty-map">
+                                목적지 약도 정보가 없습니다.
+                            </div>
+                        {% endif %}
+
+                        <button class="zoom-btn zoom-plus">＋</button>
+                        <button class="zoom-btn zoom-minus">－</button>
+
+                    </div>
+
+                    <div class="legend">
+                        <div class="legend-item">
+                            <span class="legend-marker current"></span>
+                            <span>현재 위치</span>
+                        </div>
+
+                        <div class="legend-item">
+                            <span class="legend-marker target"></span>
+                            <span>목적지</span>
+                        </div>
+
+                        <div class="socket-state">
+                            <span class="socket-dot" id="socketDot"></span>
+                            <span id="socketStatus">연결 대기</span>
+                        </div>
+                    </div>
+
+                </section>
+
+            </main>
+            
+            <div class="pause-modal" id="pauseModal">
+                <div class="pause-modal-card">
+                    <div class="pause-icon">⏸</div>
+                    <h2>길 안내를 일시정지했습니다</h2>
+                    <p>
+                        안내를 계속 진행하거나,<br>
+                        경로를 변경할 수 있습니다.
+                    </p>
+
+                    <div class="pause-actions">
+                        <button class="modal-btn route-change" id="changeRouteButton">
+                            경로 변경
+                        </button>
+
+                        <button class="modal-btn continue" id="continueButton">
+                            계속
+                        </button>
+
+                        <button class="modal-btn stop" id="stopServiceButton">
+                            이용 중지
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            <div class="panel status-panel">
-
-                <div class="status-box">
-                    <div class="status-label">현재 상태</div>
-                    <div class="status-value" id="statusValue">
-                        안내 준비 중
-                    </div>
-                </div>
-
-                <div class="status-box">
-                    <div class="status-label">현재 목적지</div>
-                    <div class="status-value" id="currentTarget">
-                        {{ destination }}
-                    </div>
-                </div>
-
-                <div class="status-box">
-                    <div class="status-label">WebSocket 상태</div>
-                    <div class="status-value" id="socketStatus">
-                        연결 대기
-                    </div>
-                </div>
-
-                <div class="guide-message" id="guideMessage">
-                    로봇을 따라 이동해 주세요.<br>
-                    이동 중에는 로봇과 너무 멀어지지 않도록 주의해 주세요.
-                </div>
-
-            </div>
-
         </div>
-
-        <div class="button-area">
-            <button class="btn-cancel" id="cancelButton">
-                안내 취소
-            </button>
-
-            <button class="btn-finish" id="finishButton">
-                안내 완료
-            </button>
-
-            <button class="btn-home" id="homeButton">
-                처음 화면
-            </button>
-        </div>
-
     </div>
 
     <script>
@@ -242,7 +143,6 @@
         const DESTINATION_NAME = "{{ destination }}";
     </script>
 
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="{{ url_for('static', filename='js/navigation.js') }}"></script>
 </body>
 </html>

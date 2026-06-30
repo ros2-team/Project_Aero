@@ -1,0 +1,335 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, "Noto Sans KR", sans-serif;
+    overflow: hidden;
+}
+
+.idle-page {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: #f5f9ff;
+}
+
+.idle-background {
+    position: absolute;
+    inset: 0;
+    background-image: url("../img/ui/background.png");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: 0;
+}
+
+.idle-overlay {
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0.96) 0%,
+            rgba(255, 255, 255, 0.90) 32%,
+            rgba(255, 255, 255, 0.55) 58%,
+            rgba(255, 255, 255, 0.08) 100%
+        );
+    z-index: 1;
+}
+
+.idle-header {
+    position: relative;
+    z-index: 2;
+
+    height: 96px;
+    padding: 0 48px;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.roaming-badge {
+    height: 46px;
+    padding: 0 22px;
+    border-radius: 16px;
+
+    background: linear-gradient(135deg, #0b74ff, #0052df);
+    color: white;
+
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    font-size: 20px;
+    font-weight: 900;
+
+    box-shadow: 0 8px 20px rgba(0, 89, 216, 0.22);
+}
+
+.badge-icon {
+    font-size: 19px;
+}
+
+.header-logo {
+    width: 300px;
+    height: auto;
+    object-fit: contain;
+    display: block;
+}
+.header-right-space {
+    width: 120px;
+    height: 1px;
+}
+
+.idle-main {
+    position: relative;
+    z-index: 2;
+
+    height: calc(100vh - 250px);
+    padding: 30px 86px 0;
+
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+}
+
+.idle-text-area {
+    padding-left: 24px;
+    transform: translateY(-34px);
+}
+
+.idle-text-area h1 {
+    margin: 0;
+
+    color: #061b4e;
+    font-size: 64px;
+    line-height: 1.25;
+    font-weight: 900;
+    letter-spacing: -2px;
+}
+
+.idle-text-area h1 span {
+    color: #0668f6;
+}
+
+.idle-text-area p {
+    margin: 34px 0 42px;
+
+    color: #303b4f;
+    font-size: 29px;
+    line-height: 1.65;
+    font-weight: 600;
+    letter-spacing: -0.8px;
+}
+
+.start-button {
+    width: 460px;
+    height: 74px;
+
+    border: none;
+    border-radius: 16px;
+
+    background: linear-gradient(135deg, #0875ff, #0054e3);
+    color: white;
+
+    font-size: 28px;
+    font-weight: 900;
+
+    cursor: pointer;
+    box-shadow: 0 14px 28px rgba(0, 91, 216, 0.28);
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+}
+
+.start-button span {
+    font-size: 34px;
+    transform: translateY(-2px);
+}
+
+.robot-area {
+    position: relative;
+    height: 100%;
+
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+.robot-image {
+    width: min(48vw, 620px);
+    max-height: 78vh;
+    object-fit: contain;
+
+    transform: translateY(52px);
+    filter: drop-shadow(0 20px 28px rgba(6, 27, 78, 0.16));
+}
+
+.status-cards {
+    position: absolute;
+    left: 86px;
+    bottom: 64px;
+    z-index: 2;
+
+    display: flex;
+    gap: 20px;
+}
+
+.status-card {
+    width: 230px;
+    height: 118px;
+
+    padding: 20px 24px;
+
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(210, 224, 246, 0.9);
+    box-shadow: 0 14px 34px rgba(6, 27, 78, 0.11);
+    backdrop-filter: blur(8px);
+
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.status-icon {
+    color: #0668f6;
+    font-size: 32px;
+}
+
+.status-label {
+    color: #64748b;
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.status-value {
+    color: #061b4e;
+    font-size: 25px;
+    font-weight: 900;
+
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    white-space: nowrap;
+}
+
+.green-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #27c46b;
+    display: inline-block;
+}
+
+@media (max-width: 1100px) {
+    .idle-text-area h1 {
+        font-size: 48px;
+    }
+
+    .idle-text-area p {
+        font-size: 23px;
+    }
+
+    .start-button {
+        width: 420px;
+        height: 78px;
+        font-size: 27px;
+    }
+
+    .status-card {
+        width: 180px;
+        height: 112px;
+    }
+
+    .status-value {
+        font-size: 22px;
+    }
+}
+
+@media (max-width: 800px) {
+    body {
+        overflow: auto;
+    }
+
+    .idle-page {
+        min-height: 100vh;
+        height: auto;
+    }
+
+    .idle-header {
+        padding: 0 22px;
+    }
+
+    .header-logo {
+        height: 42px;
+    }
+
+    .roaming-badge {
+        height: 40px;
+        padding: 0 16px;
+        font-size: 15px;
+    }
+
+    .wifi-icon {
+        font-size: 36px;
+    }
+
+    .idle-main {
+        height: auto;
+        padding: 26px 28px 0;
+        grid-template-columns: 1fr;
+    }
+
+    .idle-text-area {
+        padding-left: 0;
+        text-align: left;
+        transform: none;
+    }
+
+    .idle-text-area h1 {
+        font-size: 38px;
+    }
+
+    .idle-text-area p {
+        margin: 24px 0 28px;
+        font-size: 19px;
+    }
+
+    .start-button {
+        width: 100%;
+        height: 68px;
+        font-size: 23px;
+    }
+
+    .robot-area {
+        height: 340px;
+    }
+
+    .robot-image {
+        width: 80vw;
+        max-height: 360px;
+        transform: translateY(20px);
+    }
+
+    .status-cards {
+        position: relative;
+        left: auto;
+        bottom: auto;
+
+        padding: 28px;
+        flex-direction: column;
+    }
+
+    .status-card {
+        width: 100%;
+    }
+}
