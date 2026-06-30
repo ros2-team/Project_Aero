@@ -94,24 +94,27 @@ class ControlNode(Node):
         ### 융합된 결과물(min_dist)을 이용해 로봇 제어 명령 퍼블리시
         if min_dist is not None:
             if min_dist > 120.0:
-                    ### 사용자가 170cm이상 너무 멀어지면
-                    self.get_logger().warn(f" 사용자 멀어짐 {min_dist:.1f}cm" )
-                    
-                    ### 전후진(x)과 회전(z) 속도를 0으로 설정하여 멈춤
-                    self.cmd_pub()
+                ### 사용자가 120cm이상 너무 멀어지면
+                self.get_logger().warn(f" 사용자 멀어짐 {min_dist:.1f}cm" )
+
+                self.human_lost = True
+
+                # ### 전후진(x)과 회전(z) 속도를 0으로 설정하여 멈춤
+                # self.cmd_pub()
 
             else:
                 ### 적정 거리 유지 중
                 self.get_logger().info(f" 적정 거리 유지 중 {min_dist:.1f}cm")
+                
         else:
             pass
 
-    def cmd_pub(self):
-        self.get_logger().info(" 로봇이 일시 정지 합니다.")
-        twist_msg = Twist()
-        twist_msg.linear.x = 0.0
-        twist_msg.angular.z = 0.0
-        self.cmd_vel_pub.publish(twist_msg)
+    # def cmd_pub(self):
+    #     self.get_logger().info(" 로봇이 일시 정지 합니다.")
+    #     twist_msg = Twist()
+    #     twist_msg.linear.x = 0.0
+    #     twist_msg.angular.z = 0.0
+    #     self.cmd_vel_pub.publish(twist_msg)
 
 
 def main(args=None):
