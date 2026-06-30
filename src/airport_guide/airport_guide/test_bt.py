@@ -2,324 +2,189 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
-from geometry_msgs.msg import Twist
-from nav2_msgs.action import NavigateToPose  
-from rclpy.action import ActionClient  
-import time
-import threading  # 🎯 터미널 입력을 백그라운드에서 감시하기 위해 추가
+from std_msgs.msg import Bool
+from nav2_msgs.action import NavigateToPose
+from rclpy.action import ActionClient
 
-# 라이브러리 및 노드 의존성 임포트
+from airport_guide.blackboard import Blackboard, GoalState
+from airport_guide.bt_nodes import (
+    Selector, Sequence,
+    ConditionBatteryLow, ActionSystemShutdown,
+    ConditionSensorTimeout, ActionSensorEmergencyStop,
+    ConditionWebPause, ActionWebPauseStop,
+    ConditionEmergency, ActionEmergencyStop,
+    ActionRecoverFromEmergency,
+    ConditionHumanLost, ActionSearchHuman,
+    ConditionHumanFar, ActionSignalToHuman,
+    ConditionObstacle, ActionAvoidance,
+    ConditionArrived, ActionStopGuide,
+    ConditionHasGoal, ActionMoveToGoal,
+    ActionIdle,
+)
 from airport_guide.battery_node import BatteryNode
-from airport_guide.blackboard import Blackboard
 from airport_guide.arrival_node import ArrivalNode
 from airport_guide.front_cam_node import FrontCameraNode
 
-# ==============================================================================
-# [CORE] 행동 트리 기저 클래스 정의
-# ==============================================================================
-class BTNode:
-    def __init__(self, name):
-        self.name = name
-    def tick(self, blackboard, ros_node):
-        raise NotImplementedError
 
-class Selector(BTNode):
-    def __init__(self, name):
-        super().__init__(name)
-        self.children = []
-    def add_child(self, child):
-        self.children.append(child)
-    def tick(self, blackboard, ros_node):  
-        for child in self.children:  
-            status = child.tick(blackboard, ros_node)
-            if status != "FAILURE":  
-                return status  
-        return "FAILURE"  
-
-class Sequence(BTNode):  
-    def __init__(self, name):
-        super().__init__(name)
-        self.children = []
-    def add_child(self, child):
-        self.children.append(child)
-    def tick(self, blackboard, ros_node):
-        for child in self.children:  
-            status = child.tick(blackboard, ros_node)
-            if status != "SUCCESS":  
-                return status  
-        return "SUCCESS"  
-
-######## 0. 배터리 방전 방지 브랜치 #######
-class ConditionBatteryLow(BTNode):
-    def tick(self, blackboard, ros_node):
-        if blackboard.battery_low or blackboard.battery_level <= 30.0:  
-            return "SUCCESS"
-        return "FAILURE"
-
-class ActionSystemShutdown(BTNode):
-    def tick(self, blackboard, ros_node):
-        if not blackboard.charging_started:   
-            ros_node.get_logger().error(f"배터리 부족 상태 감지 ({blackboard.battery_level}%) -> 충전소 이동")
-            ros_node.send_nav_goal(-0.07, -0.5)
-            blackboard.charging_started = True
-            blackboard.goal_sent = True 
-        return "RUNNING"
-
-
-####### 1. 하드웨어 무결성 감시 (센서 유실 감시) #######
-class ConditionSensorTimeout(BTNode):
-    def tick(self, blackboard, ros_node):
-        current_time = time.time()
-        if (current_time - blackboard.last_sensor_time) > 1.0 or blackboard.sensor_timeout:
-            blackboard.sensor_timeout = True 
-            return "SUCCESS"
-        return "FAILURE"
-
-class ActionSensorEmergencyStop(BTNode):
-    def tick(self, blackboard, ros_node):
-        ros_node.get_logger().error("⚠️ [CRITICAL] 센서 데이터 유실 감지! 시스템 정지 대기.", throttle_duration_sec=2.0)
-        ros_node.publish_velocity(0.0, 0.0)
-        return "RUNNING"
-    
-####### 1.5. 웹 인터페이스 강제 일시정지 브랜치 #######
-class ConditionWebPause(BTNode):
-    def tick(self, blackboard, ros_node):
-        if getattr(blackboard, 'is_paused', False):
-            return "SUCCESS"
-        return "FAILURE"
-
-class ActionWebPauseStop(BTNode):
-    def tick(self, blackboard, ros_node):
-        ros_node.get_logger().warn("⏸️ [WEB] 사용자가 웹에서 일시정지를 요청했습니다. 강제 정지 유지.", throttle_duration_sec=3.0)
-        ros_node.publish_velocity(0.0, 0.0)
-        return "RUNNING"
-    
-
-####### 2. 전방 충돌 방지 -> 사람이 가로막으면 무조건 정지 #######
-class ConditionEmergency(BTNode):
-    def __init__(self, name):
-        super().__init__(name)
-        # 🎯 이전 루프에서 사람이 있었는지 기억하는 내부 플래그
-        self.was_human_detected = False
-
-    def tick(self, blackboard, ros_node):
-        is_human = getattr(blackboard, 'is_front_human', False)
-        distance = getattr(blackboard, 'front_obstacle_distance', 10.0)
-
-        if is_human and distance <= 1.2:
-            self.was_human_detected = True
-            return "SUCCESS"
-        
-        # 방금 전까지 사람이 가로막고 있다가 방금 막 사라진 타이밍(Edge 감지)
-        if self.was_human_detected and not is_human:
-            ros_node.get_logger().info("🏃‍♂️ 전방 사람이 비켜섰습니다. 주행 락을 해제하고 재출발합니다.")
-            blackboard.goal_sent = False  # 하단 내비게이션 주행 락 해제
-            self.was_human_detected = False  # 상태 초기화
-
-        return "FAILURE"
-
-class ActionEmergencyStop(BTNode):
-    def tick(self, blackboard, ros_node):
-        ros_node.get_logger().error("[전방 위험] 사람이 경로를 막아 강제 정지합니다.", throttle_duration_sec=1.0)
-        ros_node.publish_velocity(0.0, 0.0)
-        return "RUNNING"
-
-
-####### 3. 후방캠 사람 추적 및 낙오 방지 #######
-class ConditionHumanLost(BTNode):
-    def tick(self, blackboard, ros_node):
-        if blackboard.human_lost or (not blackboard.human_tracked and blackboard.human_lost_timer >= 5.0):
-            return "SUCCESS"
-        return "FAILURE"
-
-class ActionSearchHuman(BTNode):
-    def tick(self, blackboard, ros_node):
-        ros_node.get_logger().error("❓ [안내 유실] 대상 재탐색 대기 모드.", throttle_duration_sec=3.0)
-        ros_node.publish_velocity(0.0, 0.0) 
-        return "RUNNING"
-
-class ConditionHumanFar(BTNode):
-    def tick(self, blackboard, ros_node): 
-        if blackboard.human_far or (blackboard.human_tracked and blackboard.human_distance > 2.0):
-            return "SUCCESS"
-        return "FAILURE"
-
-class ActionSignalToHuman(BTNode):
-    def tick(self, blackboard, ros_node):
-        ros_node.get_logger().warn(f"📢 [대기] 가이드 대상 거리 초과 ({blackboard.human_distance}m). 사용자를 기다립니다.", throttle_duration_sec=3.0)
-        ros_node.publish_velocity(0.0, 0.0) 
-        return "RUNNING"
-
-
-####### 4. 측후방 회피 시간 보장 브랜치 (장애물 우회 제어 레이어) #######
-class ConditionObstacle(BTNode):
-    def tick(self, blackboard, ros_node):
-        if blackboard.obstacle_warning or (0.0 < blackboard.rear_obstacle_distance <= 1.5):
-            return "SUCCESS"
-        return "FAILURE"
-
-class ActionAvoidance(BTNode):
-    def tick(self, blackboard, ros_node):
-        ros_node.get_logger().info("🔄 [우회 제어] 측후방 사물(차량 등) 발견 영역 통과 중. Nav2 Local Planner 가동을 보장합니다.", throttle_duration_sec=2.0)
-        return "RUNNING"
-
-####### 5. 경유지 도착 및 대기 제어 브랜치 #######
-class ConditionArrived(BTNode):   
-    def tick(self, blackboard, ros_node):
-        if blackboard.is_arrived:
-            return "SUCCESS"
-        return "FAILURE"
-    
-class ActionStopGuide(BTNode):    
-    def tick(self, blackboard, ros_node):
-        ros_node.publish_velocity(0.0, 0.0)
-        return "RUNNING"     
-
-####### 6. 내비게이션 최종 주행 실행 브랜치 (자율주행 제어 핵심 레이어) #######
-class ConditionHasGoal(BTNode):
-    def tick(self, blackboard, ros_node):
-        if blackboard.has_goal and not blackboard.goal_failed:
-            return "SUCCESS"
-        return "FAILURE" 
-
-class ActionMoveToGoal(BTNode):     
-    def tick(self, blackboard, ros_node):
-        if blackboard.goal_sent:
-            return "RUNNING"
-
-        ros_node.get_logger().info(f"🚀 이동 시작 -> {blackboard.goal_name}")
-        ros_node.send_nav_goal(blackboard.goal_x, blackboard.goal_y)  
-        blackboard.goal_sent = True
-        return "RUNNING"
-
-
-####### [BRANCH 7] 시스템 기저 베이스라인 대기 브랜치 (Default Idle Layer) #######
-class ActionIdle(BTNode):
-    def tick(self, blackboard, ros_node):
-        ros_node.get_logger().info("💤 트리 베이스라인 대기 모드 (모든 태스크 완료 혹은 대기)", throttle_duration_sec=10.0)
-        return "RUNNING"
-
-
-# ==============================================================================
-# [NODE SYSTEM] ROS2 메인 엔진 오케스트레이터
-# ==============================================================================
 class AirportGuideBT(Node):
     def __init__(self, blackboard):
         super().__init__("airport_guide_bt")
         self.blackboard = blackboard
-        self.cmd_vel_pub = self.create_publisher(Twist, "/cmd_vel", 10)
         self.nav_client = ActionClient(self, NavigateToPose, '/navigate_to_pose')
+
+        # [수정] _current_goal_handle을 __init__에서 미리 None으로 초기화.
+        # 기존엔 _goal_response_callback이 한 번도 안 불린 시점에 cancel_nav_goal()이
+        # 먼저 호출되면 hasattr() 체크로 방어하긴 했지만, 애초에 속성을 미리
+        # 선언해두는 게 "이 객체가 어떤 필드를 갖는지" 명확해서 더 안전함.
+        self._current_goal_handle = None
+
+        self.pause_sub = self.create_subscription(
+            Bool, '/test/pause', self._pause_callback, 10
+        )
 
         self.root = Selector("Root")
 
-        battery_branch = Sequence("BatteryBranch")
-        battery_branch.add_child(ConditionBatteryLow("BatteryLow"))
-        battery_branch.add_child(ActionSystemShutdown("Shutdown"))
+        battery_br = Sequence("BatteryBranch")
+        battery_br.add_child(ConditionBatteryLow("BatteryLow"))
+        battery_br.add_child(ActionSystemShutdown("Shutdown"))
 
-        sensor_branch = Sequence("SensorBranch")
-        sensor_branch.add_child(ConditionSensorTimeout("SensorTimeout"))
-        sensor_branch.add_child(ActionSensorEmergencyStop("SensorEStop"))
+        sensor_br = Sequence("SensorBranch")
+        sensor_br.add_child(ConditionSensorTimeout("SensorTimeout"))
+        sensor_br.add_child(ActionSensorEmergencyStop("SensorEStop"))
 
-        pause_branch = Sequence("WebPauseBranch")
-        pause_branch.add_child(ConditionWebPause("WebPause"))
-        pause_branch.add_child(ActionWebPauseStop("WebPauseStop"))
+        pause_br = Sequence("WebPauseBranch")
+        pause_br.add_child(ConditionWebPause("WebPause"))
+        pause_br.add_child(ActionWebPauseStop("WebPauseStop"))
 
-        emergency_branch = Sequence("EmergencyBranch")
-        emergency_branch.add_child(ConditionEmergency("Emergency"))
-        emergency_branch.add_child(ActionEmergencyStop("Stop"))
+        emergency_br = Selector("EmergencyBranch")
+        stop_seq = Sequence("EmergencyStopSeq")
+        stop_seq.add_child(ConditionEmergency("Emergency"))
+        stop_seq.add_child(ActionEmergencyStop("Stop"))
+        emergency_br.add_child(stop_seq)
+        emergency_br.add_child(ActionRecoverFromEmergency("Recover"))
 
-        human_control_hub = Selector("HumanControlHub")
-        human_lost_seq = Sequence("HumanLostSeq")
-        human_lost_seq.add_child(ConditionHumanLost("HumanLost"))
-        human_lost_seq.add_child(ActionSearchHuman("SearchHuman"))
-        human_far_seq = Sequence("HumanFarSeq")
-        human_far_seq.add_child(ConditionHumanFar("HumanFar"))
-        human_far_seq.add_child(ActionSignalToHuman("SignalToHuman"))
-        human_control_hub.add_child(human_lost_seq)
-        human_control_hub.add_child(human_far_seq)
+        human_hub = Selector("HumanControlHub")
+        lost_seq = Sequence("HumanLostSeq")
+        lost_seq.add_child(ConditionHumanLost("HumanLost"))
+        lost_seq.add_child(ActionSearchHuman("SearchHuman"))
+        far_seq = Sequence("HumanFarSeq")
+        far_seq.add_child(ConditionHumanFar("HumanFar"))
+        far_seq.add_child(ActionSignalToHuman("SignalToHuman"))
+        human_hub.add_child(lost_seq)
+        human_hub.add_child(far_seq)
 
-        avoid_branch = Sequence("AvoidanceBranch")
-        avoid_branch.add_child(ConditionObstacle("Obstacle"))
-        avoid_branch.add_child(ActionAvoidance("Avoid"))
-        
-        arrival_branch = Sequence("ArrivalBranch")
-        arrival_branch.add_child(ConditionArrived("Arrived"))
-        arrival_branch.add_child(ActionStopGuide("StopGuide"))
-        
-        nav_branch = Sequence("NavigationBranch")
-        nav_branch.add_child(ConditionHasGoal("HasGoal"))     
-        nav_branch.add_child(ActionMoveToGoal("MoveToGoal"))   
+        avoid_br = Sequence("AvoidanceBranch")
+        avoid_br.add_child(ConditionObstacle("Obstacle"))
+        avoid_br.add_child(ActionAvoidance("Avoid"))
 
-        self.root.add_child(battery_branch)        
-        self.root.add_child(sensor_branch)     
-        self.root.add_child(pause_branch) 
-        self.root.add_child(emergency_branch)   
-        self.root.add_child(human_control_hub)        
-        self.root.add_child(avoid_branch)       
-        self.root.add_child(arrival_branch)     
-        self.root.add_child(nav_branch)        
+        arrival_br = Sequence("ArrivalBranch")
+        arrival_br.add_child(ConditionArrived("Arrived"))
+        arrival_br.add_child(ActionStopGuide("StopGuide"))
+
+        nav_br = Sequence("NavigationBranch")
+        nav_br.add_child(ConditionHasGoal("HasGoal"))
+        nav_br.add_child(ActionMoveToGoal("MoveToGoal"))
+
+        self.root.add_child(battery_br)
+        self.root.add_child(sensor_br)
+        self.root.add_child(pause_br)
+        self.root.add_child(emergency_br)
+        self.root.add_child(human_hub)
+        self.root.add_child(avoid_br)
+        self.root.add_child(arrival_br)
+        self.root.add_child(nav_br)
         self.root.add_child(ActionIdle("SystemIdle"))
 
         self.timer = self.create_timer(0.1, self.bt_tick)
 
-        self.input_thread = threading.Thread(target=self.terminal_input_loop, daemon=True)
-        self.input_thread.start()
+    def _pause_callback(self, msg):
+        if msg.data:
+            self.blackboard.is_paused = True
+        else:
+            self.blackboard.is_paused = False
+            if self.blackboard.goal_state == GoalState.CANCELING:
+                # [수정] 직접 대입 -> 단일 진입점 사용
+                self.set_goal_state(GoalState.IDLE)
 
-    # 터미널 입력 감시 루프 함수
-    def terminal_input_loop(self):
-        while rclpy.ok():
-            user_input = input("\n[TEST INJECTION] 일시정지 하려면 'y', 해제하려면 'n'을 입력하세요: ").strip().lower()
-            
-            if user_input == 'y':
-                self.blackboard.is_paused = True
-                self.get_logger().info("📥 [키보드 입력] blackboard.is_paused = True 주입 완료")
-            elif user_input == 'n':
-                # 🎯 팩트: 일시정지 스위치를 내리면서, 하단 주행 락 가드 플래그(goal_sent)도 같이 False로 해제합니다.
-                self.blackboard.is_paused = False
-                self.blackboard.goal_sent = False  
-                self.get_logger().info("📥 [키보드 입력] blackboard.is_paused = False 및 goal_sent = False 주입 완료 (재출발)")
-            else:
-                print("⚠️ 잘못된 입력입니다. 'y' 또는 'n'만 입력하세요.")
-                
-
-    def send_nav_goal(self, x, y):   
+    def send_nav_goal(self, x, y):
         self.get_logger().info(f"🎯 Nav2 액션 목표 전송 시작: ({x}, {y})")
         goal_msg = NavigateToPose.Goal()
-        goal_msg.pose.header.frame_id = "map"  
+        goal_msg.pose.header.frame_id = "map"
         goal_msg.pose.header.stamp = self.get_clock().now().to_msg()
         goal_msg.pose.pose.position.x = x
         goal_msg.pose.pose.position.y = y
         goal_msg.pose.pose.orientation.w = 1.0
 
-        self.nav_client.wait_for_server()  
-        self.nav_client.send_goal_async(goal_msg)  
+        # [추가] 새 goal을 보내기 전, 이전 goal의 핸들 흔적을 지워서
+        # 직전 goal의 result 콜백이 늦게 도착했을 때 새 goal 상태를
+        # 잘못 건드리지 않도록 방지
+        self._current_goal_handle = None
+
+        self.nav_client.wait_for_server()
+        send_goal_future = self.nav_client.send_goal_async(goal_msg)
+        send_goal_future.add_done_callback(self._goal_response_callback)
+
+        self.set_goal_state(GoalState.SENT)
+
+    def set_goal_state(self, new_state: GoalState):
+        """
+        goal_state를 바꾸는 유일한 진입점.
+        bt_nodes.py의 어떤 Condition/Action도, 이 클래스의 어떤 콜백도
+        blackboard.goal_state에 직접 대입하지 않고 반드시 이 메서드를 통해서만 바꾼다.
+        """
+        old_state = self.blackboard.goal_state
+        self.blackboard.goal_state = new_state
+        self.get_logger().info(f"🔁 [FSM] goal_state: {old_state.name} -> {new_state.name}")
+
+    def _goal_response_callback(self, future):
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self.get_logger().error("❌ Nav2가 goal을 거절했습니다.")
+            self.set_goal_state(GoalState.IDLE)
+            return
+
+        self._current_goal_handle = goal_handle
+        self.set_goal_state(GoalState.RUNNING)
+
+        result_future = goal_handle.get_result_async()
+        result_future.add_done_callback(self._goal_result_callback)
+
+    def _goal_result_callback(self, future):
+        # CANCELING/IDLE 상태일 때 result가 뒤늦게 도착한 경우는
+        # 이미 다른 경로(취소/복구)로 정리됐다고 보고 DONE으로 덮어쓰지 않는다.
+        if self.blackboard.goal_state not in [GoalState.CANCELING, GoalState.IDLE]:
+            self.set_goal_state(GoalState.DONE)
+        self._current_goal_handle = None
+
+    def cancel_nav_goal(self):
+        if self.blackboard.goal_state in [GoalState.RUNNING, GoalState.SENT]:
+            if self._current_goal_handle is not None:
+                self.set_goal_state(GoalState.CANCELING)
+                self._current_goal_handle.cancel_goal_async()
+            else:
+                # goal_handle이 아직 도착하기 전(accept 응답 전)인데 cancel이 들어온
+                # 애매한 타이밍 -> CANCELING을 거치지 않고 바로 IDLE로 정리
+                self.set_goal_state(GoalState.IDLE)
 
     def bt_tick(self):
         self.root.tick(self.blackboard, self)
-    
-    def publish_velocity(self, linear_x, angular_z):
-        msg = Twist()
-        msg.linear.x = linear_x
-        msg.angular.z = angular_z
-        self.cmd_vel_pub.publish(msg)
 
 
 def main(args=None):
     rclpy.init(args=args)
     shared_blackboard = Blackboard()
-    shared_blackboard.last_sensor_time = time.time()
-    
+
     bt_node = AirportGuideBT(shared_blackboard)
     battery_node = BatteryNode(shared_blackboard)
-    arrival_node = ArrivalNode(shared_blackboard) 
-    front_cam_node = FrontCameraNode(shared_blackboard) 
-    
+    arrival_node = ArrivalNode(shared_blackboard)
+    front_cam_node = FrontCameraNode(shared_blackboard)
+
     executor = MultiThreadedExecutor()
     executor.add_node(bt_node)
     executor.add_node(battery_node)
-    executor.add_node(arrival_node) 
-    executor.add_node(front_cam_node) 
-    
+    executor.add_node(arrival_node)
+    executor.add_node(front_cam_node)
+
     try:
         executor.spin()
     except KeyboardInterrupt:
@@ -328,8 +193,9 @@ def main(args=None):
         bt_node.destroy_node()
         battery_node.destroy_node()
         arrival_node.destroy_node()
-        front_cam_node.destroy_node() 
+        front_cam_node.destroy_node()
         rclpy.shutdown()
+
 
 if __name__ == "__main__":
     main()
