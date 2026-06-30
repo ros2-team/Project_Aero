@@ -36,7 +36,7 @@ class ScanLidar(Node):
 
         # 2. 거리 필터 마스크 (nan/inf 동시 처리)
         ### 이건 아래 조건에 따라 True 혹은 False를 반환함
-        valid = (dist_cm > 0.0) & (dist_cm <= 100.0)
+        valid = (dist_cm > 0.0) & (dist_cm <= 200.0)
 
         # 3. 전방/후방 마스크
         ### 전 후방 조건 다르게 하여 저장
@@ -75,18 +75,18 @@ class ScanLidar(Node):
         self.front_pub(f_angles, f_dists)
         self.rear_pub(r_angles, r_dists)
 
-    def rear_pub(self, f_angles, f_dists):
+    def rear_pub(self, r_angles, r_dists):
         msg = LidarScanData()
-        msg.data = f_angles.tolist()
-        msg.data = f_dists.tolist()   # numpy → list 변환은 여기서만
+        msg.angles = r_angles.tolist()
+        msg.distances = r_dists.tolist()   # numpy → list 변환은 여기서만
         self.pub_front.publish(msg)
 
         
     
-    def front_pub(self, r_angles, r_dists):
+    def front_pub(self, f_angles, f_dists):
         msg = LidarScanData()
-        msg.data = r_angles.tolist()
-        msg.data = r_dists.tolist()   # numpy → list 변환은 여기서만
+        msg.angles = f_angles.tolist()
+        msg.distances = f_dists.tolist()   # numpy → list 변환은 여기서만
         self.pub_rear.publish(msg)
         
 def main(args=None):
