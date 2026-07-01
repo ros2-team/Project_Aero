@@ -7,8 +7,13 @@ from std_msgs.msg import Bool, String
 from nav2_msgs.action import NavigateToPose
 from rclpy.action import ActionClient
 
-
+# ---------------------------------------------------------------------
+# 📦 아키텍처 핵심 노드 및 변환 노드 패키지 임포트
+# ---------------------------------------------------------------------
 from airport_guide.blackboard import Blackboard, GoalState
+from airport_guide.web_data import WebBridgeNode                  # Flask 감시 노드
+# from airport_guide.web_data import WebCommandProcessorNode # 데이터 인터프리터
+
 from airport_guide.bt_nodes import (
     Selector, Sequence,
     ConditionBatteryLow, ActionSystemShutdown,
@@ -34,19 +39,15 @@ class AirportGuideBT(Node):
         self.blackboard = blackboard
         self.nav_client = ActionClient(self, NavigateToPose, '/navigate_to_pose')
 
-        # [수정] _current_goal_handle을 __init__에서 미리 None으로 초기화.
-        # 기존엔 _goal_response_callback이 한 번도 안 불린 시점에 cancel_nav_goal()이
-        # 먼저 호출되면 hasattr() 체크로 방어하긴 했지만, 애초에 속성을 미리
-        # 선언해두는 게 "이 객체가 어떤 필드를 갖는지" 명확해서 더 안전함.
         self._current_goal_handle = None
         
-
         self.pause_sub = self.create_subscription(
             Bool, '/test/pause', self._pause_callback, 10
         )
 
         self.root = Selector("Root")
 
+        # 각 시나리오별 서브 브랜치 선언
         battery_br = Sequence("BatteryBranch")
         battery_br.add_child(ConditionBatteryLow("BatteryLow"))
         battery_br.add_child(ActionSystemShutdown("Shutdown"))
@@ -88,6 +89,8 @@ class AirportGuideBT(Node):
         nav_br.add_child(ConditionHasGoal("HasGoal"))
         nav_br.add_child(ActionMoveToGoal("MoveToGoal"))
 
+        # 최상위 Selector 자식 순서 배치 (테스트 안정화 이후 안전/예외 브랜치와 순서 재정립 가능)
+        self.root.add_child(nav_br) 
         self.root.add_child(battery_br)
         self.root.add_child(sensor_br)
         self.root.add_child(pause_br)
@@ -95,7 +98,6 @@ class AirportGuideBT(Node):
         self.root.add_child(human_hub)
         self.root.add_child(avoid_br)
         self.root.add_child(arrival_br)
-        self.root.add_child(nav_br)
         self.root.add_child(ActionIdle("SystemIdle"))
 
         self.timer = self.create_timer(0.1, self.bt_tick)
@@ -106,7 +108,6 @@ class AirportGuideBT(Node):
         else:
             self.blackboard.is_paused = False
             if self.blackboard.goal_state == GoalState.CANCELING:
-                # [수정] 직접 대입 -> 단일 진입점 사용
                 self.set_goal_state(GoalState.IDLE)
 
     def send_nav_goal(self, x, y):
@@ -118,9 +119,6 @@ class AirportGuideBT(Node):
         goal_msg.pose.pose.position.y = y
         goal_msg.pose.pose.orientation.w = 1.0
 
-        # [추가] 새 goal을 보내기 전, 이전 goal의 핸들 흔적을 지워서
-        # 직전 goal의 result 콜백이 늦게 도착했을 때 새 goal 상태를
-        # 잘못 건드리지 않도록 방지
         self._current_goal_handle = None
 
         self.nav_client.wait_for_server()
@@ -130,11 +128,6 @@ class AirportGuideBT(Node):
         self.set_goal_state(GoalState.SENT)
 
     def set_goal_state(self, new_state: GoalState):
-        """
-        goal_state를 바꾸는 유일한 진입점.
-        bt_nodes.py의 어떤 Condition/Action도, 이 클래스의 어떤 콜백도
-        blackboard.goal_state에 직접 대입하지 않고 반드시 이 메서드를 통해서만 바꾼다.
-        """
         old_state = self.blackboard.goal_state
         self.blackboard.goal_state = new_state
         self.get_logger().info(f"🔁 [FSM] goal_state: {old_state.name} -> {new_state.name}")
@@ -153,8 +146,6 @@ class AirportGuideBT(Node):
         result_future.add_done_callback(self._goal_result_callback)
 
     def _goal_result_callback(self, future):
-        # CANCELING/IDLE 상태일 때 result가 뒤늦게 도착한 경우는
-        # 이미 다른 경로(취소/복구)로 정리됐다고 보고 DONE으로 덮어쓰지 않는다.
         if self.blackboard.goal_state not in [GoalState.CANCELING, GoalState.IDLE]:
             self.set_goal_state(GoalState.DONE)
         self._current_goal_handle = None
@@ -165,40 +156,56 @@ class AirportGuideBT(Node):
                 self.set_goal_state(GoalState.CANCELING)
                 self._current_goal_handle.cancel_goal_async()
             else:
-                # goal_handle이 아직 도착하기 전(accept 응답 전)인데 cancel이 들어온
-                # 애매한 타이밍 -> CANCELING을 거치지 않고 바로 IDLE로 정리
                 self.set_goal_state(GoalState.IDLE)
 
+
+    # ***********디버깅 코드 **********************
     def bt_tick(self):
+        # 1초마다 블랙보드 상태를 터미널에 강제로 찍어주는 디버그 로그
+        self.get_logger().info(
+            f"🔄 [BT TICK] 현재 goal_name: '{self.blackboard.goal_name}', "
+            f"state: {self.blackboard.goal_state.name if self.blackboard.goal_state else 'None'}", 
+            throttle_duration_sec=1.0
+        )
+        # 실제 행동트리 실행
         self.root.tick(self.blackboard, self)
 
 
 def main(args=None):
     rclpy.init(args=args)
+    
+    # 🎯 [Single Source of Truth] 단 하나의 공유 메모리 공간 생성
     shared_blackboard = Blackboard()
 
+    # 1. 존재하는 실물 노드들만 생성하여 동일한 shared_blackboard 주입
+    # (WebBridgeNode가 web_route_list에 쓰고, ArrivalNode가 이를 파싱해서 goal_*로 변환함)
+    web_bridge_node = WebBridgeNode(shared_blackboard)
     bt_node = AirportGuideBT(shared_blackboard)
     battery_node = BatteryNode(shared_blackboard)
     arrival_node = ArrivalNode(shared_blackboard)
     front_cam_node = FrontCameraNode(shared_blackboard)
 
+    # 2. 멀티스레드 익스큐터에 실물 노드 5개 등록 (WebCommandProcessorNode 완전 삭제)
     executor = MultiThreadedExecutor()
+    executor.add_node(web_bridge_node)
     executor.add_node(bt_node)
     executor.add_node(battery_node)
     executor.add_node(arrival_node)
     executor.add_node(front_cam_node)
 
     try:
+        # 단일 프로세스로 병렬 가동 시작
         executor.spin()
     except KeyboardInterrupt:
         pass
     finally:
+        # 자원 해제
+        web_bridge_node.destroy_node()
         bt_node.destroy_node()
         battery_node.destroy_node()
         arrival_node.destroy_node()
         front_cam_node.destroy_node()
         rclpy.shutdown()
 
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
