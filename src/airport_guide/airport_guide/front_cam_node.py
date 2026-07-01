@@ -2,7 +2,7 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
-from nav_msgs.msg import Odometry  # 🎯 [추가] 오도메트리 메시지 타입 임포트
+from nav_msgs.msg import Odometry  
 from cv_bridge import CvBridge
 from ultralytics import YOLO
 import time
@@ -16,18 +16,13 @@ class FrontCameraNode(Node):
         
         self.model = YOLO('yolov8n.pt') 
 
-        # 발행하는 토픽과 구독하는 토픽의 이름을 명확히 분리하여 무한 루프를 방지합니다.
-        self.image_pub = self.create_publisher(CompressedImage, '/yolo/image_raw/compressed', 10)
-
-        # 실제 카메라가 장치 드라이버로부터 쏴주는 원본 압축 이미지 토픽 명으로 지정해야 합니다.
+        self.image_pub = self.image_pub = self.create_publisher(CompressedImage, '/yolo/image_raw/compressed', 10)
         self.image_sub = self.create_subscription(
             CompressedImage,
             '/cam1/image_raw/compressed', 
             self.image_callback,
             10
         )
-        
-        # 🎯 [추가] 로봇 기저 레이어의 오도메트리 토픽을 구독합니다.
         self.odom_sub = self.create_subscription(
             Odometry,
             '/odom',
@@ -35,17 +30,14 @@ class FrontCameraNode(Node):
             10
         )
         
-        self.stop_class_ids = [0, 15, 16, 17, 18, 19]
-        self.avoid_class_ids = [2, 5, 7]
-        
         self.last_inference_time = time.time()
         self.inference_interval = 0.2 
         self.last_results = None
 
-        self.get_logger().info("✅ 전방 카메라, YOLO 스케줄러 및 Odom 감시 통합 노드가 가동되었습니다.")
+        self.get_logger().info("✅ [Data Layer] Front Camera YOLO 노드가 가동되었습니다.")
 
-    # 🎯 [추가] 오도메트리 토픽이 들어올 때마다 공유 블랙보드의 타임스탬프를 실시간 최신화합니다.
     def odom_callback(self, msg):
+        # [FACTS AREA WRITE]
         self.blackboard.last_sensor_time = time.time()
         self.blackboard.sensor_timeout = False
 
@@ -62,20 +54,26 @@ class FrontCameraNode(Node):
             self.last_results = self.model(cv_image, verbose=False, conf=0.6, device='cpu')
             self.last_inference_time = current_time
 
+            # 🎯 초기화 가드 (FACTS / DERIVED 영역 초기화)
             self.blackboard.is_front_human = False
             self.blackboard.front_obstacle_distance = 10.0
-            human_count = 0
+            self.blackboard.is_dynamic_obstacle = False  # Derived 레이어 연동 플래그
 
             if self.last_results and len(self.last_results) > 0 and len(self.last_results[0].boxes) > 0:
                 for box in self.last_results[0].boxes:
                     class_id = int(box.cls[0])
                     
-                    if class_id == 0:  # Person 클래스
-                        human_count += 1
+                    if class_id == 0:  # Person 클래스 검출 시
+                        # 1) [FACTS AREA WRITE] 원시 데이터 주입
                         self.blackboard.is_front_human = True
-                        self.blackboard.front_obstacle_distance = 0.4  # 실험용 강제 근접 거리 세팅
-                        self.get_logger().info(f"🚨 [EMERGENCY] 전방 인물 감지!! 즉시 정지 플래그 작동: 현재 {human_count}명", throttle_duration_sec=0.5)
+                        self.blackboard.front_obstacle_distance = 0.4  # 실험용 물리 거리 강제 매핑
+                        
+                        # 2) [DERIVED AREA WRITE] Facts 기반 결론 도출 결과 업데이트
+                        self.blackboard.is_dynamic_obstacle = True  
+                        
+                        self.get_logger().info("🚨 [DERIVED] 전방 동적 장애물(사람) 존재 판단 확정.", throttle_duration_sec=1.0)
 
+        # 이미지 주석 처리 및 토픽 발행 레이어
         try:
             if self.last_results and len(self.last_results) > 0:
                 annotated_frame = self.last_results[0].plot()
@@ -94,20 +92,13 @@ class FrontCameraNode(Node):
                 pub_msg.data = compressed_img.tobytes()
                 self.image_pub.publish(pub_msg)
         except Exception as pub_err:
-            self.get_logger().error(f"YOLO 압축 이미지 토픽 발행 실패: {pub_err}")
+            self.get_logger().error(f"YOLO 이미지 발행 오류: {pub_err}")
 
 
 def main(args=None):
     rclpy.init(args=args)
-    
-    class DummyBlackboard:
-        def __init__(self):
-            self.is_front_human = False
-            self.front_obstacle_distance = 10.0
-            self.last_sensor_time = time.time()
-            self.sensor_timeout = False
-            
-    db = DummyBlackboard()
+    from airport_guide.blackboard import Blackboard
+    db = Blackboard()
     node = FrontCameraNode(blackboard=db)
     
     try:

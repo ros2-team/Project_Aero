@@ -48,17 +48,31 @@ class Blackboard:
         self.goal_x = 0.0
         self.goal_y = 0.0
 
-        self.waypoint_list = [
-            {"name": "WayPoint_1", "x": 2.8, "y": 0.6},
-            {"name": "WayPoint_2", "x": 2.9, "y": -1.4},
-            {"name": "Gate_A3", "x": 1.4, "y": -0.5}
-        ]
-        self._init_first_waypoint()
+        # =====================================================================
+        # 5) WEB DATA COMMITTED AREA: 웹 서버에서 유입된 실시간 원본 데이터 저장소
+        #    (팀원이 따로 만든 판단 노드/파일이 아래 데이터들을 감시하고 가공함)
+        # =====================================================================
+        # 웹에서 들어온 최신 액션 문자열 (예: "navigation_route", "pause_navigation", "stop_navigation", "resume_navigation")
+        self.web_action = ""
 
-    def _init_first_waypoint(self):
-        # 초기화 
-        if len(self.waypoint_list) > 0:
-            current_wp = self.waypoint_list.pop(0)
-            self.goal_name = current_wp["name"]
-            self.goal_x = current_wp["x"]
-            self.goal_y = current_wp["y"]
+        # 웹에서 받아온 전체 경유지 리스트 원본 배열 (요청이 들어올 때마다 통째로 업데이트됨)
+        # 구조 예시: [{"location_code": "gate_a", "location_name": "게이트 A", "order": 1, "x": 2.7, "y": 0.4}, ...]
+        self.web_route_list = []
+
+        # 웹 명령이 새롭게 들어온 시점의 타임스탬프 기록용
+        self.web_last_update_time = time.time()
+
+    #     self.waypoint_list = [
+    #         {"name": "WayPoint_1", "x": 2.8, "y": 0.6},
+    #         {"name": "WayPoint_2", "x": 2.9, "y": -1.4},
+    #         {"name": "Gate_A3", "x": 1.4, "y": -0.5}
+    #     ]
+    #     self._init_first_waypoint()
+
+    # def _init_first_waypoint(self):
+    #     # 초기화 
+    #     if len(self.waypoint_list) > 0:
+    #         current_wp = self.waypoint_list.pop(0)
+    #         self.goal_name = current_wp["name"]
+    #         self.goal_x = current_wp["x"]
+    #         self.goal_y = current_wp["y"]

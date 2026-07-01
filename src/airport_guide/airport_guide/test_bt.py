@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 import rclpy
+import json
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, String
 from nav2_msgs.action import NavigateToPose
 from rclpy.action import ActionClient
+
 
 from airport_guide.blackboard import Blackboard, GoalState
 from airport_guide.bt_nodes import (
@@ -37,6 +39,7 @@ class AirportGuideBT(Node):
         # 먼저 호출되면 hasattr() 체크로 방어하긴 했지만, 애초에 속성을 미리
         # 선언해두는 게 "이 객체가 어떤 필드를 갖는지" 명확해서 더 안전함.
         self._current_goal_handle = None
+        
 
         self.pause_sub = self.create_subscription(
             Bool, '/test/pause', self._pause_callback, 10
