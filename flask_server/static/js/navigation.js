@@ -10,6 +10,7 @@ const continueButton = document.getElementById("continueButton");
 const stopServiceButton = document.getElementById("stopServiceButton");
 
 let isPaused = false;
+let isFinishRedirecting = false;
 
 function updateNavigationStatus(data){
     if(!socketStatus){
@@ -31,6 +32,11 @@ function updateNavigationStatus(data){
     }
     else if(data.status === "finished"){
         socketStatus.innerText = "안내 완료";
+
+        if(!isFinishRedirecting){
+            isFinishRedirecting = true;
+            moveToFinishPage();
+        }
     }
     else {
         socketStatus.innerText = data.status;
@@ -128,6 +134,11 @@ function setPauseButtonText(paused) {
     }
 }
 
+function moveToFinishPage() {
+    setTimeout(() => {
+        location.href = "/finish";
+    }, 1200);
+}
 
 async function postNavigationApi(url) {
     const response = await fetch(url, {

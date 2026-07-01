@@ -19,11 +19,19 @@ socketio = SocketIO(
 )
 
 navigation_state = {
-    "status" : "idle",
-    "type" : None,
-    "route" : [],
-    "current_index" : 0,
+    "status" : "idle",          
+    "type" : None,              
+    "route" : [],               
+    "current_index" : 0,        
     "is_paused" : False
+}
+
+robot_command_state = {
+    "has_command" : False,      #현재 전달할 명령이 있는지
+    "command_id" : 0,           #명령 번호
+    "type" : None,              #navigation_route / robot_call
+    "route" : [],               #좌표 리스트
+    "is_handled" : True         #행동트리가 처리했는지 안했는지
 }
 
 #   function    ---------------------------------------------------------------------------------------------
@@ -38,10 +46,17 @@ def send_route_to(route_type, navigation_route):
     navigation_state["route"] = navigation_route
     navigation_state["current_index"] = 0
     navigation_state["is_paused"] = False
-    
+
+    robot_command_state["has_command"] = True
+    robot_command_state["command_id"] += 1
+    robot_command_state["type"] = route_type
+    robot_command_state["route"] = navigation_route
+    robot_command_state["is_handled"] = False
+     
     emit_navigation_state()
 
     print("\n로봇 행동트리로 전달할 payload")
+    print(f"command_id: {robot_command_state['command_id']}")
     print(f"type: {payload['type']}")
 
     for target in payload["route"]:
@@ -56,7 +71,21 @@ def send_route_to(route_type, navigation_route):
 
     return payload
 
-    # 팀원 행동트리 연동 방식 확정 후 이곳에 연결 검색용)extention_port
+def send_control_to(command_type):
+    robot_command_state["has_command"] = True
+    robot_command_state["command_id"] += 1
+    robot_command_state["type"] = command_type
+    robot_command_state["route"] = []
+    robot_command_state["is_handled"] = False
+
+    print("\n로봇 행동트리로 전달할 제어 명령")
+    print(f"command_id: {robot_command_state['command_id']}")
+    print(f"type: {command_type}")
+
+    return {
+        "type": command_type,
+        "route": []
+    }
 
 def emit_navigation_state():
     socketio.emit(
@@ -215,7 +244,9 @@ def pause_navigation():
     navigation_state["status"] = "paused"
     navigation_state["is_paused"] = True
 
+    send_control_to("pause_navigation")
     emit_navigation_state()
+
 
     # Ros2 Nav2 정지 명령 연결
     return jsonify({
@@ -231,6 +262,7 @@ def resume_navigation():
     navigation_state["status"] = "moving"
     navigation_state["is_paused"] = False
     
+    send_control_to("resume_navigation")
     emit_navigation_state()
 
     # Ros2 Nav2 계속 명령 연결
@@ -250,7 +282,9 @@ def stop_navigation():
     navigation_state["current_index"] = 0
     navigation_state["is_paused"] = False
 
+    send_control_to("stop_navigation")
     emit_navigation_state()
+
 
     #Ros2 Nav2 취소 명령 연결
     return jsonify({
@@ -259,38 +293,68 @@ def stop_navigation():
         "navigation_state" : navigation_state
     })
 
-#행동트리한태 받아오는 값 테스트
-@app.route("/api/navigation/next", methods=["POST"])
-def next_navigation_target():
-    print("navigation next target request")
+@app.route("/api/navigation/update", methods=["POST"])
+def update_navigation():
+    data = request.get_json()
 
-    route = navigation_state["route"]
-    current_index = navigation_state["current_index"]
-
-    if not route:
+    if not data:
         return jsonify({
             "status": "error",
-            "message": "현재 안내 경로가 없습니다."
+            "message": "상태 데이터가 없습니다."
         }), 400
 
-    next_index = current_index + 1
+    status = data.get("status")
+    current_index = data.get("current_index")
 
-    if next_index >= len(route):
-        navigation_state["status"] = "finished"
-        navigation_state["current_index"] = len(route) - 1
-        navigation_state["is_paused"] = False
+    if status:
+        navigation_state["status"] = status
+
+    if current_index is not None:
+        route_length = len(navigation_state["route"])
+
+        if route_length == 0:
+            return jsonify({
+                "status": "error",
+                "message": "현재 안내 경로가 없습니다."
+            }), 400
+
+        if current_index < 0 or current_index >= route_length:
+            return jsonify({
+                "status": "error",
+                "message": "current_index 범위가 올바르지 않습니다."
+            }), 400
+
+        navigation_state["current_index"] = current_index
+
+    if navigation_state["status"] == "paused":
+        navigation_state["is_paused"] = True
     else:
-        navigation_state["status"] = "moving"
-        navigation_state["current_index"] = next_index
         navigation_state["is_paused"] = False
 
     emit_navigation_state()
 
     return jsonify({
         "status": "success",
-        "message": "navigation index updated",
+        "message": "navigation state updated",
         "navigation_state": navigation_state
     })
+
+@app.route("/api/navigation/reset", methods = ["POST"])
+def reset_navigation():
+    print("navigation reset request")
+    navigation_state["status"] = "idle"
+    navigation_state["type"] = None
+    navigation_state["route"] = []
+    navigation_state["current_index"] = 0
+    navigation_state["is_paused"] = False
+
+    emit_navigation_state()
+
+    return jsonify({
+        "status" : "success",
+        "message" : "navigation reset",
+        "navigation_state" : navigation_state
+    })   
 
 @app.route("/api/qrcall/callrobot", methods = ["POST"])
 def callrobot_qrcall():
@@ -355,8 +419,31 @@ def callrobot_qrcall():
             "message" : "server error"
         }), 500
     
+@app.route("/api/robot/command")
+def get_robot_command():
+    return jsonify({
+        "status" : "success",
+        "command" : robot_command_state
+    })
 
+@app.route("/api/robot/command/handled", methods=["POST"])
+def mark_robot_command_handled():
+    data = request.get_json()
+    command_id = data.get("command_id")
 
+    if command_id != robot_command_state["command_id"]:
+        return jsonify({
+            "status": "error",
+            "message": "command_id가 현재 명령과 일치하지 않습니다."
+        }), 400
+
+    robot_command_state["is_handled"] = True
+
+    return jsonify({
+        "status": "success",
+        "message": "robot command handled",
+        "command": robot_command_state
+    })
 
 if __name__ == "__main__":
     socketio.run(
