@@ -45,6 +45,35 @@
     background: white;
 }
 
+.route-item.completed {
+    border-color: rgba(35, 198, 104, 0.35);
+    background: rgba(35, 198, 104, 0.08);
+}
+
+.route-item.completed .route-index {
+    background: #23c668;
+    color: white;
+}
+
+.route-item.completed .route-status {
+    color: #15924a;
+}
+
+
+.route-item.paused {
+    border-color: rgba(255, 159, 26, 0.4);
+    background: rgba(255, 159, 26, 0.10);
+}
+
+.route-item.paused .route-index {
+    background: #ff9f1a;
+    color: white;
+}
+
+.route-item.paused .route-status {
+    color: #c77500;
+}
+
 .route-item.done {
     background: #edfff7;
     border-color: #b9f2d7;

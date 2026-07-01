@@ -11,8 +11,70 @@ const stopServiceButton = document.getElementById("stopServiceButton");
 
 let isPaused = false;
 
+function updateNavigationStatus(data){
+    if(!socketStatus){
+        return;
+    }
+    if(data.status === "connected"){
+        socketStatus.innerText = "서버 연결됨";
+        return;
+    }
+    
+    if(data.status === "moving"){
+        socketStatus.innerText = "이동 중";
+    }
+    else if(data.status === "paused"){
+        socketStatus.innerText = "일시정지 중";
+    }
+    else if(data.status === "stopped"){
+        socketStatus.innerText = "안내 중지됨";
+    }
+    else if(data.status === "finished"){
+        socketStatus.innerText = "안내 완료";
+    }
+    else {
+        socketStatus.innerText = data.status;
+    }
 
-function renderRouteList() {
+    if(typeof data.current_index === "number"){
+        renderRouteList(
+            data.current_index,
+            data.status
+        );
+    }
+}
+
+function connectSocket() {
+    const socket = io();
+    
+    socket.on("connect", () => {
+        if(socketStatus){
+            socketStatus.innerText = "서버 연결됨";
+        }
+        if(socketDot){
+            socketDot.classList.add("connected");
+        }
+        console.log("Socket connected");
+    });
+    
+    socket.on("disconnect", () => {
+        if(socketStatus) {
+            socketStatus.innerText = "연결 끊김";
+        }
+        if(socketDot) {
+            socketDot.classList.remove("connected");
+        }
+        console.log("Socket disconnected");
+    });
+
+    socket.on("navigation_status", (data) => {
+        console.log("navigation_status", data);
+        updateNavigationStatus(data);
+    });
+
+}
+
+function renderRouteList(currentIndex = 0, navigationStatus = "moving") {
     const savedRoute = localStorage.getItem("navigationRoute");
 
     if (!savedRoute) {
@@ -25,14 +87,26 @@ function renderRouteList() {
         let className = "route-item waiting";
         let statusText = "대기 중";
 
-        if (index === 0) {
-            className = "route-item active";
-            statusText = "이동 중";
+        if (index < currentIndex) {
+            className = "route-item completed";
+            statusText = "도착 완료";
+        } else if (index === currentIndex) {
+            if (navigationStatus === "paused") {
+                className = "route-item paused";
+                statusText = "일시정지 중";
+            } else if (navigationStatus === "finished") {
+                className = "route-item completed";
+                statusText = "도착 완료";
+            } else {
+                className = "route-item active";
+                statusText = "이동 중";
+            }
         }
 
         return `
             <div class="${className}">
                 <div class="route-index">${index + 1}</div>
+
                 <div class="route-info">
                     <div class="route-name">${item.location_name}</div>
                     <div class="route-status">${statusText}</div>
@@ -41,18 +115,6 @@ function renderRouteList() {
         `;
     }).join("");
 }
-
-
-function setSocketDummyState() {
-    if (socketStatus) {
-        socketStatus.innerText = "디자인 확인용";
-    }
-
-    if (socketDot) {
-        socketDot.classList.add("connected");
-    }
-}
-
 
 function setPauseButtonText(paused) {
     if (!pauseButton) {
@@ -164,5 +226,5 @@ pauseModal.addEventListener("click", (event) => {
 
 
 renderRouteList();
-setSocketDummyState();
+connectSocket();
 setPauseButtonText(false);

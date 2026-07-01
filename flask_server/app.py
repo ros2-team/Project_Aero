@@ -32,12 +32,14 @@ def send_route_to(route_type, navigation_route):
         "type": route_type,
         "route": navigation_route
     }
-
+    
     navigation_state["status"] = "moving"
     navigation_state["type"] = route_type
     navigation_state["route"] = navigation_route
     navigation_state["current_index"] = 0
     navigation_state["is_paused"] = False
+    
+    emit_navigation_state()
 
     print("\n로봇 행동트리로 전달할 payload")
     print(f"type: {payload['type']}")
@@ -55,6 +57,18 @@ def send_route_to(route_type, navigation_route):
     return payload
 
     # 팀원 행동트리 연동 방식 확정 후 이곳에 연결 검색용)extention_port
+
+def emit_navigation_state():
+    socketio.emit(
+        "navigation_status",
+        {
+            "status" : navigation_state["status"],
+            "type" : navigation_state["type"],
+            "route" : navigation_state["route"],
+            "current_index" : navigation_state["current_index"],
+            "is_paused" : navigation_state["is_paused"]
+        }
+    )
 
 
 
@@ -201,6 +215,8 @@ def pause_navigation():
     navigation_state["status"] = "paused"
     navigation_state["is_paused"] = True
 
+    emit_navigation_state()
+
     # Ros2 Nav2 정지 명령 연결
     return jsonify({
         "status" : "success",
@@ -214,6 +230,8 @@ def resume_navigation():
 
     navigation_state["status"] = "moving"
     navigation_state["is_paused"] = False
+    
+    emit_navigation_state()
 
     # Ros2 Nav2 계속 명령 연결
     return jsonify({
@@ -232,11 +250,46 @@ def stop_navigation():
     navigation_state["current_index"] = 0
     navigation_state["is_paused"] = False
 
+    emit_navigation_state()
+
     #Ros2 Nav2 취소 명령 연결
     return jsonify({
         "status" : "success",
         "message" : "navigation stopped",
         "navigation_state" : navigation_state
+    })
+
+#행동트리한태 받아오는 값 테스트
+@app.route("/api/navigation/next", methods=["POST"])
+def next_navigation_target():
+    print("navigation next target request")
+
+    route = navigation_state["route"]
+    current_index = navigation_state["current_index"]
+
+    if not route:
+        return jsonify({
+            "status": "error",
+            "message": "현재 안내 경로가 없습니다."
+        }), 400
+
+    next_index = current_index + 1
+
+    if next_index >= len(route):
+        navigation_state["status"] = "finished"
+        navigation_state["current_index"] = len(route) - 1
+        navigation_state["is_paused"] = False
+    else:
+        navigation_state["status"] = "moving"
+        navigation_state["current_index"] = next_index
+        navigation_state["is_paused"] = False
+
+    emit_navigation_state()
+
+    return jsonify({
+        "status": "success",
+        "message": "navigation index updated",
+        "navigation_state": navigation_state
     })
 
 @app.route("/api/qrcall/callrobot", methods = ["POST"])
