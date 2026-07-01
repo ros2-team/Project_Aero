@@ -10,7 +10,9 @@ def get_location_by_code(location_code):
             location_name,
             pos_x,
             pos_y,
-            yaw
+            yaw,
+            map_x,
+            map_y
         from location 
         where location_code = %s
         """

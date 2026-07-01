@@ -34,6 +34,15 @@ robot_command_state = {
     "is_handled" : True         #행동트리가 처리했는지 안했는지
 }
 
+robot_status_state = {          #내가 받아올 데이터 값
+    "battery": 0,               #배터리 잔량
+    "x": 0.0,                   #현재 위치값
+    "y": 0.0,
+    "yaw": 0.0,
+    "robot_status": "unknown",  #상태 값
+    "network": "disconnected"   #연결 상태
+}
+
 #   function    ---------------------------------------------------------------------------------------------
 def send_route_to(route_type, navigation_route):
     payload = {
@@ -97,6 +106,12 @@ def emit_navigation_state():
             "current_index" : navigation_state["current_index"],
             "is_paused" : navigation_state["is_paused"]
         }
+    )
+
+def emit_robot_status():
+    socketio.emit(
+        "robot_status",
+        robot_status_state
     )
 
 
@@ -223,7 +238,9 @@ def start_navigation():
             "location_name" : location["location_name"],
             "x" : location["pos_x"],
             "y" : location["pos_y"],
-            "yaw" : location["yaw"]
+            "yaw" : location["yaw"],
+            "map_x" : location["map_x"],
+            "map_y" : location["map_y"]
         })
     
     print("최종 경로")
@@ -400,7 +417,9 @@ def callrobot_qrcall():
                 "location_name" : location["location_name"],
                 "x" : location["pos_x"],
                 "y" : location["pos_y"],
-                "yaw" : location["yaw"]
+                "yaw" : location["yaw"],
+                "map_x" : location["map_x"],
+                "map_y" : location["map_y"]
             }
         ]
 
@@ -443,6 +462,49 @@ def mark_robot_command_handled():
         "status": "success",
         "message": "robot command handled",
         "command": robot_command_state
+    })
+
+@app.route("/api/robot/status", methods=["POST"])
+def update_robot_status():
+    data = request.get_json()
+
+    if not data:
+        return jsonify({
+            "status": "error",
+            "message": "로봇 상태 데이터가 없습니다."
+        }), 400
+
+    if "battery" in data:
+        robot_status_state["battery"] = data["battery"]
+
+    if "x" in data:
+        robot_status_state["x"] = data["x"]
+
+    if "y" in data:
+        robot_status_state["y"] = data["y"]
+
+    if "yaw" in data:
+        robot_status_state["yaw"] = data["yaw"]
+
+    if "robot_status" in data:
+        robot_status_state["robot_status"] = data["robot_status"]
+
+    if "network" in data:
+        robot_status_state["network"] = data["network"]
+
+    emit_robot_status()
+
+    return jsonify({
+        "status": "success",
+        "message": "robot status updated",
+        "robot_status": robot_status_state
+    })
+
+@app.route("/api/robot/status")
+def get_robot_status():
+    return jsonify({
+        "status": "success",
+        "robot_status": robot_status_state
     })
 
 if __name__ == "__main__":

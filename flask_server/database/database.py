@@ -19,9 +19,11 @@ def get_locations():
             location_name,
             pos_x,
             pos_y,
-            yaw
+            yaw,
+            map_x,
+            map_y
         FROM location
-        ORDER BY location_name
+        ORDER BY id
     """)
     
     result = cursor.fetchall()

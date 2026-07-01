@@ -79,17 +79,18 @@
                 <div class="status-icon">🔋</div>
                 <div>
                     <div class="status-label">배터리</div>
-                    <div class="status-value">85%</div>
+                    <div class="status-value" id="batteryValue">--%</div>
                 </div>
             </div>
 
             <div class="status-card">
-                <div class="status-icon">📶</div>
-                <div>
+                <div class="status-icon network">▥</div>
+
+                <div class="status-text">
                     <div class="status-label">연결 상태</div>
                     <div class="status-value">
-                        정상
-                        <span class="green-dot"></span>
+                        <span id="networkValue">연결 대기</span>
+                        <span class="green-dot" id="networkDot"></span>
                     </div>
                 </div>
             </div>
@@ -97,5 +98,7 @@
         </section>
 
     </div>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/idle.js') }}"></script>
 </body>
 </html>

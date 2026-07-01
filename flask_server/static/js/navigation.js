@@ -2,6 +2,10 @@ const socketStatus = document.getElementById("socketStatus");
 const socketDot = document.getElementById("socketDot");
 const routeList = document.getElementById("routeList");
 
+const navBatteryValue = document.getElementById("navBatteryValue");
+const navRobotStatus = document.getElementById("navRobotStatus");
+const navRobotPosition = document.getElementById("navRobotPosition");
+
 const pauseButton = document.getElementById("pauseButton");
 const pauseModal = document.getElementById("pauseModal");
 
@@ -9,8 +13,339 @@ const changeRouteButton = document.getElementById("changeRouteButton");
 const continueButton = document.getElementById("continueButton");
 const stopServiceButton = document.getElementById("stopServiceButton");
 
+const mapImage = document.getElementById("mapImage");
+const mapCanvas = document.getElementById("mapCanvas");
+
+const MAP_INFO = {
+    resolution: 0.05,
+    originX: -3.44,
+    originY: -3.2,
+    width: 128,
+    height: 126
+};
+
+// 임시 현재 위치
+let currentRobotPosition = {
+    x : -1.5,
+    y : -0.95,
+    yaw : 0.0
+}
+
 let isPaused = false;
 let isFinishRedirecting = false;
+// --------------------------------------------------------------------------------------------------------지도
+function rosToMapPixel(rosX, rosY) {
+    const pixelX = (rosX - MAP_INFO.originX) / MAP_INFO.resolution;
+    const pixelY = MAP_INFO.height - ((rosY - MAP_INFO.originY) / MAP_INFO.resolution);
+    return {
+        x : pixelX,
+        y : pixelY
+    };
+}
+
+function rosToCanvasPoint(rosX, rosY) {
+    const mapPixel = rosToMapPixel(rosX, rosY);
+
+    return mapPixelToCanvasPoint(
+        mapPixel.x,
+        mapPixel.y
+    );
+}
+
+function mapPixelToCanvasPoint(pixelX, pixelY) {
+    const canvasRect = mapCanvas.getBoundingClientRect();
+
+    const canvasWidth = canvasRect.width;
+    const canvasHeight = canvasRect.height;
+
+    const mapRatio = MAP_INFO.width / MAP_INFO.height;
+    const canvasRatio = canvasWidth / canvasHeight;
+
+    let drawWidth;
+    let drawHeight;
+    let offsetX;
+    let offsetY;
+
+    if (canvasRatio > mapRatio) {
+        drawHeight = canvasHeight;
+        drawWidth = drawHeight * mapRatio;
+        offsetX = (canvasWidth - drawWidth) / 2;
+        offsetY = 0;
+    } else {
+        drawWidth = canvasWidth;
+        drawHeight = drawWidth / mapRatio;
+        offsetX = 0;
+        offsetY = (canvasHeight - drawHeight) / 2;
+    }
+
+    return {
+        x: offsetX + (pixelX / MAP_INFO.width) * drawWidth,
+        y: offsetY + (pixelY / MAP_INFO.height) * drawHeight
+    };
+}
+
+function drawNavigationMap() {
+    if (!mapCanvas || !mapImage) {
+        return;
+    }
+
+    const savedRoute = localStorage.getItem("navigationRoute");
+
+    if (!savedRoute) {
+        return;
+    }
+
+    const route = JSON.parse(savedRoute);
+
+    const canvasRect = mapCanvas.getBoundingClientRect();
+
+    mapCanvas.width = canvasRect.width;
+    mapCanvas.height = canvasRect.height;
+
+    const ctx = mapCanvas.getContext("2d");
+
+    ctx.clearRect(
+        0,
+        0,
+        mapCanvas.width,
+        mapCanvas.height
+    );
+
+    const points = [];
+
+    const currentPoint = rosToCanvasPoint(
+        currentRobotPosition.x,
+        currentRobotPosition.y
+    );
+
+    points.push({
+        ...currentPoint,
+        type: "current",
+        name: "현재 위치"
+    });
+
+    route.forEach((target) => {
+        let point;
+
+        if (
+            typeof target.map_x === "number" &&
+            typeof target.map_y === "number"
+        ) {
+            point = mapImagePixelToCanvasPoint(
+                target.map_x,
+                target.map_y
+            );
+        } else {
+            point = rosToCanvasPoint(
+                target.x,
+                target.y
+            );
+        }
+
+        points.push({
+            ...point,
+            type: "target",
+            name: target.location_name
+        });
+    });
+
+    drawRouteLine(ctx, points);
+    drawMarkers(ctx, points);
+}
+
+function mapImagePixelToCanvasPoint(imageX, imageY) {
+    const canvasRect = mapCanvas.getBoundingClientRect();
+
+    const canvasWidth = canvasRect.width;
+    const canvasHeight = canvasRect.height;
+
+    const imageWidth = mapImage.naturalWidth;
+    const imageHeight = mapImage.naturalHeight;
+
+    const imageRatio = imageWidth / imageHeight;
+    const canvasRatio = canvasWidth / canvasHeight;
+
+    let drawWidth;
+    let drawHeight;
+    let offsetX;
+    let offsetY;
+
+    if (canvasRatio > imageRatio) {
+        drawHeight = canvasHeight;
+        drawWidth = drawHeight * imageRatio;
+        offsetX = (canvasWidth - drawWidth) / 2;
+        offsetY = 0;
+    } else {
+        drawWidth = canvasWidth;
+        drawHeight = drawWidth / imageRatio;
+        offsetX = 0;
+        offsetY = (canvasHeight - drawHeight) / 2;
+    }
+
+    return {
+        x: offsetX + (imageX / imageWidth) * drawWidth,
+        y: offsetY + (imageY / imageHeight) * drawHeight
+    };
+}
+
+function drawRouteLine(ctx, points) {
+    if (points.length < 2) {
+        return;
+    }
+
+    ctx.beginPath();
+
+    points.forEach((point, index) => {
+        if (index === 0) {
+            ctx.moveTo(point.x, point.y);
+        } else {
+            ctx.lineTo(point.x, point.y);
+        }
+    });
+
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "#0875ff";
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.setLineDash([10, 8]);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+}
+
+function drawMarkers(ctx, points) {
+    points.forEach((point, index) => {
+        if (point.type === "current") {
+            drawCurrentMarker(ctx, point);
+        } else {
+            drawTargetMarker(ctx, point, index);
+        }
+    });
+}
+
+function drawCurrentMarker(ctx, point) {
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 11, 0, Math.PI * 2);
+    ctx.fillStyle = "#0875ff";
+    ctx.fill();
+
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "white";
+    ctx.stroke();
+
+    ctx.font = "bold 14px Arial";
+    ctx.fillStyle = "#061b4e";
+    ctx.textAlign = "center";
+    ctx.fillText("현재", point.x, point.y - 18);
+}
+
+function drawTargetMarker(ctx, point, index) {
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 9, 0, Math.PI * 2);
+    ctx.fillStyle = "#ff4b4b";
+    ctx.fill();
+
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "white";
+    ctx.stroke();
+}
+// --------------------------------------------------------------------------------------------------------
+
+function updateRobotStatus(data) {
+    if (typeof data.x === "number") {
+        currentRobotPosition.x = data.x;
+    }
+
+    if (typeof data.y === "number") {
+        currentRobotPosition.y = data.y;
+    }
+
+    if (typeof data.yaw === "number") {
+        currentRobotPosition.yaw = data.yaw;
+    }
+
+    updateRobotStatusPanel(data);
+
+    drawNavigationMap();
+}
+
+function updateRobotStatusPanel(data) {
+    if (navBatteryValue) {
+        if (typeof data.battery === "number") {
+            navBatteryValue.innerText = `${data.battery}%`;
+        } else {
+            navBatteryValue.innerText = "--%";
+        }
+    }
+
+    if (navRobotStatus) {
+        navRobotStatus.innerText = convertRobotStatusText(
+            data.robot_status
+        );
+    }
+
+    if (navRobotPosition) {
+        const x = typeof currentRobotPosition.x === "number"
+            ? currentRobotPosition.x.toFixed(2)
+            : "--";
+
+        const y = typeof currentRobotPosition.y === "number"
+            ? currentRobotPosition.y.toFixed(2)
+            : "--";
+
+        navRobotPosition.innerText = `${x}, ${y}`;
+    }
+}
+
+function convertRobotStatusText(status) {
+    if (status === "idle") {
+        return "대기 중";
+    }
+
+    if (status === "moving") {
+        return "이동 중";
+    }
+
+    if (status === "paused") {
+        return "일시정지";
+    }
+
+    if (status === "stopped") {
+        return "정지";
+    }
+
+    if (status === "charging") {
+        return "충전 중";
+    }
+
+    if (status === "error") {
+        return "오류";
+    }
+
+    if (status === "finished") {
+        return "안내 완료";
+    }
+
+    return "알 수 없음";
+}
+
+async function loadInitialRobotStatus() {
+    try {
+        const response = await fetch("/api/robot/status");
+
+        if (!response.ok) {
+            throw new Error(`robot status request failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.status === "success") {
+            updateRobotStatus(data.robot_status);
+        }
+    } catch (error) {
+        console.error(error);
+    }
+}
 
 function updateNavigationStatus(data){
     if(!socketStatus){
@@ -77,6 +412,11 @@ function connectSocket() {
         console.log("navigation_status", data);
         updateNavigationStatus(data);
     });
+
+    socket.on("robot_status", (data) => {
+        console.log("robot_status", data);
+        updateRobotStatus(data);
+    })
 
 }
 
@@ -237,5 +577,20 @@ pauseModal.addEventListener("click", (event) => {
 
 
 renderRouteList();
+loadInitialRobotStatus();
 connectSocket();
 setPauseButtonText(false);
+
+if (mapImage) {
+    if (mapImage.complete) {
+        drawNavigationMap();
+    } else {
+        mapImage.addEventListener("load", () => {
+            drawNavigationMap();
+        });
+    }
+}
+
+window.addEventListener("resize", () => {
+    drawNavigationMap();
+});

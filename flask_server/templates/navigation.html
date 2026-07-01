@@ -45,16 +45,23 @@
                         </div>
                     </div>
 
-                    <div class="summary-card">
+                    <div class="summary-card robot-status-card">
+
                         <div class="summary-row">
-                            <span>전체 거리</span>
-                            <strong id="totalDistance">약 350 m</strong>
+                            <span>배터리</span>
+                            <strong id="navBatteryValue">--%</strong>
                         </div>
 
                         <div class="summary-row">
-                            <span>예상 시간</span>
-                            <strong id="estimatedTime">약 4분</strong>
+                            <span>로봇 상태</span>
+                            <strong id="navRobotStatus">대기 중</strong>
                         </div>
+
+                        <div class="summary-row">
+                            <span>현재 좌표</span>
+                            <strong id="navRobotPosition">--, --</strong>
+                        </div>
+
                     </div>
 
                 </aside>
@@ -71,18 +78,16 @@
 
                     <div class="map-card">
 
-                        {% if location_code != "unknown" %}
+                        <div class="slam-map-wrapper">
                             <img
                                 class="map-image"
                                 id="mapImage"
-                                src="{{ url_for('static', filename='img/pos_img/' + location_code + '.png') }}"
-                                alt="목적지 약도"
+                                src="{{ url_for('static', filename='img/map/designed_map.png') }}"
+                                alt="실내 지도"
                             >
-                        {% else %}
-                            <div class="empty-map">
-                                목적지 약도 정보가 없습니다.
-                            </div>
-                        {% endif %}
+
+                            <canvas id="mapCanvas"></canvas>
+                        </div>
 
                         <button class="zoom-btn zoom-plus">＋</button>
                         <button class="zoom-btn zoom-minus">－</button>
