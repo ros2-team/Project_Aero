@@ -121,7 +121,25 @@ def send_navigation_update(status, current_index):
     except Exception as error:
         print("send_navigation_update error:", error)
 
+def send_navigation_path(path):
+    try:
+        response = requests.post(
+            f"{BASE_URL}/api/navigation/path",
+            json={
+                "path": path
+            },
+            timeout=3
+        )
 
+        print(
+            "navigation path:",
+            len(path),
+            "points",
+            response.status_code
+        )
+
+    except Exception as error:
+        print("send_navigation_path error:", error)
 # ---------------------------------------------------------
 # Movement simulation
 # ---------------------------------------------------------
@@ -144,6 +162,25 @@ def interpolate(start_x, start_y, target_x, target_y, steps):
 
     return points
 
+def make_test_path(start_x, start_y, target_x, target_y):
+    path = []
+
+    # 현재 위치에서 목적지까지 가짜 경로 생성
+    points = interpolate(
+        start_x,
+        start_y,
+        target_x,
+        target_y,
+        steps=12
+    )
+
+    for point in points:
+        path.append({
+            "x": point["x"],
+            "y": point["y"]
+        })
+
+    return path
 
 def simulate_navigation(route):
     if not route:
@@ -185,6 +222,15 @@ def simulate_navigation(route):
             status="moving",
             current_index=index
         )
+
+        test_path = make_test_path(
+            current_x,
+            current_y,
+            target_x,
+            target_y
+        )
+
+        send_navigation_path(test_path)
 
         points = interpolate(
             current_x,

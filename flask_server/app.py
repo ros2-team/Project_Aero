@@ -43,7 +43,36 @@ robot_status_state = {          #내가 받아올 데이터 값
     "network": "disconnected"   #연결 상태
 }
 
+navigation_path_state = {
+    "path" : []                 #설정한 경로 값
+}
+
 #   function    ---------------------------------------------------------------------------------------------
+def emit_navigation_state():
+    socketio.emit(
+        "navigation_status",
+        {
+            "status" : navigation_state["status"],
+            "type" : navigation_state["type"],
+            "route" : navigation_state["route"],
+            "current_index" : navigation_state["current_index"],
+            "is_paused" : navigation_state["is_paused"]
+        }
+    )
+
+def emit_robot_status():
+    socketio.emit(
+        "robot_status",
+        robot_status_state
+    )
+
+def emit_navigation_path():
+    socketio.emit(
+        "navigation_path",
+        {
+            "path" : navigation_path_state["path"]
+        }
+    )
 def send_route_to(route_type, navigation_route):
     payload = {
         "type": route_type,
@@ -95,26 +124,6 @@ def send_control_to(command_type):
         "type": command_type,
         "route": []
     }
-
-def emit_navigation_state():
-    socketio.emit(
-        "navigation_status",
-        {
-            "status" : navigation_state["status"],
-            "type" : navigation_state["type"],
-            "route" : navigation_state["route"],
-            "current_index" : navigation_state["current_index"],
-            "is_paused" : navigation_state["is_paused"]
-        }
-    )
-
-def emit_robot_status():
-    socketio.emit(
-        "robot_status",
-        robot_status_state
-    )
-
-
 
 #   flask socketio    ---------------------------------------------------------------------------------------------    
 @socketio.on("connect")
@@ -370,6 +379,36 @@ def reset_navigation():
         "message" : "navigation reset",
         "navigation_state" : navigation_state
     })   
+
+@app.route("/api/navigation/path", methods = ["POST"])
+def update_navigation_path():
+    data = request.get_json()
+    path = data.get("path")
+
+    if not isinstance(path, list):
+        return jsonify({
+            "status" : "error",
+            "message" : "path must be list"
+        }), 400
+    
+    cleaned_path = []
+    
+    for point in path:
+        if "x" not in point or "y" not in point:
+            continue
+        cleaned_path.append({
+            "x" : float(point["x"]),
+            "y" : float(point["y"])
+        })
+
+    navigation_path_state["path"] = cleaned_path
+    
+    emit_navigation_path()
+    
+    return jsonify({
+        "status" : "success",
+        "path_count" : len(cleaned_path)
+    })
 
 @app.route("/api/qrcall/callrobot", methods = ["POST"])
 def callrobot_qrcall():

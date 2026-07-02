@@ -33,6 +33,7 @@ let currentRobotPosition = {
 
 let isPaused = false;
 let isFinishRedirecting = false;
+let navigationPath = [];
 // --------------------------------------------------------------------------------------------------------지도
 function rosToMapPixel(rosX, rosY) {
     const pixelX = (rosX - MAP_INFO.originX) / MAP_INFO.resolution;
@@ -137,44 +138,15 @@ function drawNavigationMap() {
         });
     });
 
-    drawRouteLine(ctx, points);
-    drawMarkers(ctx, points);
+    drawPlannedRouteLine(ctx, points);
+
+    if (navigationPath.length > 1) {
+        drawNavigationPath(ctx, navigationPath);
+    }
+
+    drawMarkers(ctx, points);   
 }
 
-// function mapImagePixelToCanvasPoint(imageX, imageY) {
-//     const canvasRect = mapCanvas.getBoundingClientRect();
-
-//     const canvasWidth = canvasRect.width;
-//     const canvasHeight = canvasRect.height;
-
-//     const imageWidth = mapImage.naturalWidth;
-//     const imageHeight = mapImage.naturalHeight;
-
-//     const imageRatio = imageWidth / imageHeight;
-//     const canvasRatio = canvasWidth / canvasHeight;
-
-//     let drawWidth;
-//     let drawHeight;
-//     let offsetX;
-//     let offsetY;
-
-//     if (canvasRatio > imageRatio) {
-//         drawHeight = canvasHeight;
-//         drawWidth = drawHeight * imageRatio;
-//         offsetX = (canvasWidth - drawWidth) / 2;
-//         offsetY = 0;
-//     } else {
-//         drawWidth = canvasWidth;
-//         drawHeight = drawWidth / imageRatio;
-//         offsetX = 0;
-//         offsetY = (canvasHeight - drawHeight) / 2;
-//     }
-
-//     return {
-//         x: offsetX + (imageX / imageWidth) * drawWidth,
-//         y: offsetY + (imageY / imageHeight) * drawHeight
-//     };
-// }
 
 function drawRouteLine(ctx, points) {
     if (points.length < 2) {
@@ -196,6 +168,37 @@ function drawRouteLine(ctx, points) {
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.setLineDash([10, 8]);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+}
+
+function drawPlannedRouteLine(ctx, points) {
+    if (!Array.isArray(points) || points.length < 2) {
+        return;
+    }
+
+    ctx.beginPath();
+
+    points.forEach((point, index) => {
+        if (index === 0) {
+            ctx.moveTo(
+                point.x,
+                point.y
+            );
+        } else {
+            ctx.lineTo(
+                point.x,
+                point.y
+            );
+        }
+    });
+
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(80, 90, 110, 0.35)";
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.setLineDash([6, 8]);
     ctx.stroke();
 
     ctx.setLineDash([]);
@@ -237,6 +240,101 @@ function drawTargetMarker(ctx, point, index) {
     ctx.strokeStyle = "white";
     ctx.stroke();
 }
+
+function drawNavigationPath(ctx, path) {
+    if (!Array.isArray(path) || path.length < 2) {
+        return;
+    }
+
+    const closest = findClosestPathIndex(
+        path,
+        currentRobotPosition
+    );
+
+    /*
+        로봇이 path에서 너무 멀리 떨어져 있으면
+        잘못된 index로 경로가 확 잘리는 걸 막기 위한 안전장치.
+        단위는 ROS 좌표 기준 meter.
+    */
+    const MAX_PATH_DISTANCE = 0.7;
+
+    let remainingPath;
+
+    if (closest.distance > MAX_PATH_DISTANCE) {
+        remainingPath = path;
+    } else {
+        remainingPath = [
+            {
+                x: currentRobotPosition.x,
+                y: currentRobotPosition.y
+            },
+            ...path.slice(closest.index + 1)
+        ];
+    }
+
+    if (remainingPath.length < 2) {
+        return;
+    }
+
+    ctx.beginPath();
+
+    remainingPath.forEach((pose, index) => {
+        const point = rosToCanvasPoint(
+            pose.x,
+            pose.y
+        );
+
+        if (index === 0) {
+            ctx.moveTo(
+                point.x,
+                point.y
+            );
+        } else {
+            ctx.lineTo(
+                point.x,
+                point.y
+            );
+        }
+    });
+
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = "#0875ff";
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.setLineDash([]);
+    ctx.stroke();
+}
+
+function findClosestPathIndex(path, robotPosition) {
+    if (!Array.isArray(path) || path.length === 0) {
+        return {
+            index: 0,
+            distance: Infinity
+        };
+    }
+
+    let closestIndex = 0;
+    let closestDistance = Infinity;
+
+    path.forEach((pose, index) => {
+        const dx = pose.x - robotPosition.x;
+        const dy = pose.y - robotPosition.y;
+        const distance = Math.sqrt(
+            dx * dx + dy * dy
+        );
+
+        if (distance < closestDistance) {
+            closestDistance = distance;
+            closestIndex = index;
+        }
+    });
+
+    return {
+        index: closestIndex,
+        distance: closestDistance
+    };
+}
+
 // --------------------------------------------------------------------------------------------------------
 
 function updateRobotStatus(data) {
@@ -404,6 +502,14 @@ function connectSocket() {
     socket.on("robot_status", (data) => {
         console.log("robot_status", data);
         updateRobotStatus(data);
+    })
+
+    socket.on("navigation_path", (data) => {
+        console.log("navigation_path", data);
+        if(Array.isArray(data.path)){
+            navigationPath = data.path;
+            drawNavigationMap();
+        }
     })
 
 }
