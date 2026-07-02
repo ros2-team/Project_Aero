@@ -15,6 +15,10 @@ class WebBridgeNode(Node):
         self.flask_base_url = "http://192.168.0.9:5000" 
         self.last_handled_command_id = -1             
         self.polling_interval = 0.5                   
+        
+        # 🎯 [추가] 이전 상태를 기억하여 변경 감지용 버퍼 변수 선언
+        self.last_goal_state = None
+        
         self.web_command_pub = self.create_publisher(String, "/web/command", 10)
         
         self.bt_status_sub = self.create_subscription(
@@ -58,27 +62,23 @@ class WebBridgeNode(Node):
                             processed_route = []
 
                             for wp in raw_route:
-                                # 1) 원본 경유지를 새 경로 버퍼에 순서대로 적재합니다.
                                 processed_route.append(wp)
                                 
-                                # 2) 만약 들어온 경유지의 이름이 "WayPoint_1" 이라면 바로 뒤에 우회 좌표를 생성해 끼워 넣습니다.
                                 if wp.get("location_name") == "WayPoint_1":
                                     mid_wp = {
                                         "location_name": "Corner_Mid_Point",
-                                        "x": 2.9,   # 현장 장애물 맵 정보에 기반한 커스텀 우회 X 좌표
-                                        "y": -0.4,  # 현장 장애물 맵 정보에 기반한 커스텀 우회 Y 좌표
-                                        "is_mid_point": True  # 중간 경유지임을 구별하기 위해 추가한 커스텀 메타데이터 태그
+                                        "x": 2.9,   
+                                        "y": -0.4,  
+                                        "is_mid_point": True  
                                     }
                                     processed_route.append(mid_wp)
                                     self.get_logger().info("🔄 [Route Planner] 'WayPoint_1' 감지 -> 직후에 코너링 우회용 중간 좌표를 계획 경로에 강제 주입했습니다.")
 
-                            # 🎯 정제 완료된 전체 시퀀스 경로(processed_route)를 블랙보드에 최종 동기화합니다.
                             self.blackboard.web_action = command_data.get("type")
                             self.blackboard.web_route_list = processed_route
                             self.blackboard.web_last_update_time = time.time()
                             self.get_logger().info("📊 Planner가 보정한 데이터를 Blackboard 변수에 직대입 동기화 완료.")
                             
-                            # 정제된 데이터를 통째로 변환해 행동트리에 토픽으로 사출
                             command_data["route"] = processed_route
                             self._publish_to_behavior_tree(command_data)
                             
@@ -117,14 +117,33 @@ class WebBridgeNode(Node):
             self.get_logger().error(f"처리 완료 보고 중 예외 발생: {e}")
 
     def _bt_status_callback(self, msg: String):
+        """행동트리 상태 토픽을 수신하여 상태가 '변경되었을 때만' Flask 서버로 HTTP POST 전송"""
         try:
             bt_data = json.loads(msg.data)
+            current_state = bt_data.get("goal_state")
+
+            # [핵심 로직] 상태가 이전과 같으면 Flask 전송을 건너뛰고 무시합니다.
+            if current_state == self.last_goal_state:
+                return
+
+            # 상태가 변경된 경우 로그 기록 및 전송 프로세스 진행
+            self.get_logger().info(
+                "\n" + "="*50 +
+                f"\n🔄 [상태 변경 감지] {self.last_goal_state} -> {current_state}" +
+                f"\n{json.dumps(bt_data, indent=2, ensure_ascii=False)}" +
+                "\n" + "="*50
+            )
+            
             url = f"{self.flask_base_url}/api/navigation/update"
             headers = {"Content-Type": "application/json"}
             
             res = requests.post(url, data=json.dumps(bt_data), headers=headers, timeout=1.0)
             if res.status_code == 200:
                 self.get_logger().info(f"Flask에 로봇 실시간 상태 변경 보고 성공: {bt_data}")
+                # 🎯 전송 성공 시 최신 상태를 백업하여 다음 중복을 방지합니다.
+                self.last_goal_state = current_state
+            else:
+                self.get_logger().error(f"상태 변경 보고 실패 (HTTP 상태 코드: {res.status_code})")
         except Exception as e:
             self.get_logger().error(f"로봇 상태 업데이트 보고 중 오류 발생: {e}")
 

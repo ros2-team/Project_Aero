@@ -12,7 +12,6 @@ from rclpy.action import ActionClient
 # ---------------------------------------------------------------------
 from airport_guide.blackboard import Blackboard, GoalState
 from airport_guide.web_data import WebBridgeNode                  # Flask 감시 노드
-# from airport_guide.web_data import WebCommandProcessorNode # 데이터 인터프리터
 
 from airport_guide.bt_nodes import (
     Selector, Sequence,
@@ -41,6 +40,11 @@ class AirportGuideBT(Node):
 
         self._current_goal_handle = None
         
+        # ---------------------------------------------------------------------
+        # 웹브릿지(web_data)로 실시간 상태를 쏴줄 ROS2 퍼블리셔 추가
+        # ---------------------------------------------------------------------
+        self.bt_status_pub = self.create_publisher(String, "/robot/bt_status", 10)
+
         self.pause_sub = self.create_subscription(
             Bool, '/test/pause', self._pause_callback, 10
         )
@@ -89,7 +93,7 @@ class AirportGuideBT(Node):
         nav_br.add_child(ConditionHasGoal("HasGoal"))
         nav_br.add_child(ActionMoveToGoal("MoveToGoal"))
 
-        # 최상위 Selector 자식 순서 배치 (테스트 안정화 이후 안전/예외 브랜치와 순서 재정립 가능)
+        # 최상위 Selector 자식 순서 배치
         self.root.add_child(nav_br) 
         self.root.add_child(battery_br)
         self.root.add_child(sensor_br)
@@ -158,8 +162,7 @@ class AirportGuideBT(Node):
             else:
                 self.set_goal_state(GoalState.IDLE)
 
-
-    # ***********디버깅 코드 **********************
+    # *********** 디버깅 및 웹 상태 보고 코드 **********************
     def bt_tick(self):
         # 1초마다 블랙보드 상태를 터미널에 강제로 찍어주는 디버그 로그
         self.get_logger().info(
@@ -167,6 +170,34 @@ class AirportGuideBT(Node):
             f"state: {self.blackboard.goal_state.name if self.blackboard.goal_state else 'None'}", 
             throttle_duration_sec=1.0
         )
+
+        # ---------------------------------------------------------------------
+        # 📊 1초 주기로 전처리 노드들이 쌓아둔 종합 데이터를 취합하여 웹브릿지로 발행
+        # ---------------------------------------------------------------------
+        try:
+            status_payload = {
+                "goal_state": self.blackboard.goal_state.name if self.blackboard.goal_state else "UNKNOWN",
+                "goal_name": self.blackboard.goal_name,
+                "battery_low": getattr(self.blackboard, "battery_low", False),
+                "battery_level": getattr(self.blackboard, "battery_level", 100.0),
+                "odom_pose": {
+                    # 🎯 blackboard.py 정의 변수명(current_x, current_y) 매핑 일치화
+                    #  getattr(A, "B", C): "A 객체 안에서 'B'라는 이름의 실시간 변수 값을 가져오되, 만약 변수가 존재하지 않으면 기본값으로 C를 반환
+                    "x": getattr(self.blackboard, "current_x", 0.0),
+                    "y": getattr(self.blackboard, "current_y", 0.0),
+                    "yaw": getattr(self.blackboard, "current_yaw", 0.0) 
+                }
+            }
+            
+            # JSON 직렬화 후 문자열 메시지로 변환 및 퍼블리시
+            msg = String()
+            msg.data = json.dumps(status_payload)
+            self.bt_status_pub.publish(msg)
+            
+        except Exception as e:
+            self.get_logger().error(f"웹 피드백 데이터 취합 및 퍼블리시 실패: {e}", throttle_duration_sec=3.0)
+        # ---------------------------------------------------------------------
+
         # 실제 행동트리 실행
         self.root.tick(self.blackboard, self)
 
@@ -178,14 +209,13 @@ def main(args=None):
     shared_blackboard = Blackboard()
 
     # 1. 존재하는 실물 노드들만 생성하여 동일한 shared_blackboard 주입
-    # (WebBridgeNode가 web_route_list에 쓰고, ArrivalNode가 이를 파싱해서 goal_*로 변환함)
     web_bridge_node = WebBridgeNode(shared_blackboard)
     bt_node = AirportGuideBT(shared_blackboard)
     battery_node = BatteryNode(shared_blackboard)
     arrival_node = ArrivalNode(shared_blackboard)
     front_cam_node = FrontCameraNode(shared_blackboard)
 
-    # 2. 멀티스레드 익스큐터에 실물 노드 5개 등록 (WebCommandProcessorNode 완전 삭제)
+    # 2. 멀티스레드 익스큐터에 실물 노드 5개 등록
     executor = MultiThreadedExecutor()
     executor.add_node(web_bridge_node)
     executor.add_node(bt_node)
