@@ -239,8 +239,6 @@ def start_navigation():
             "x" : location["pos_x"],
             "y" : location["pos_y"],
             "yaw" : location["yaw"],
-            "map_x" : location["map_x"],
-            "map_y" : location["map_y"]
         })
     
     print("최종 경로")
@@ -418,8 +416,6 @@ def callrobot_qrcall():
                 "x" : location["pos_x"],
                 "y" : location["pos_y"],
                 "yaw" : location["yaw"],
-                "map_x" : location["map_x"],
-                "map_y" : location["map_y"]
             }
         ]
 

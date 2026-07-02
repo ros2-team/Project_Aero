@@ -216,7 +216,7 @@
     object-fit: contain;
     display: block;
 
-    image-rendering: pixelated;
+    image-rendering: auto;
 }
 
 #mapCanvas {
@@ -227,6 +227,7 @@
     height: 100%;
 
     pointer-events: none;
+    image-rendering: auto;
 }
 
 .empty-map {

@@ -125,22 +125,10 @@ function drawNavigationMap() {
     });
 
     route.forEach((target) => {
-        let point;
-
-        if (
-            typeof target.map_x === "number" &&
-            typeof target.map_y === "number"
-        ) {
-            point = mapImagePixelToCanvasPoint(
-                target.map_x,
-                target.map_y
-            );
-        } else {
-            point = rosToCanvasPoint(
-                target.x,
-                target.y
-            );
-        }
+        const point = rosToCanvasPoint(
+            target.x,
+            target.y
+        );
 
         points.push({
             ...point,
@@ -153,40 +141,40 @@ function drawNavigationMap() {
     drawMarkers(ctx, points);
 }
 
-function mapImagePixelToCanvasPoint(imageX, imageY) {
-    const canvasRect = mapCanvas.getBoundingClientRect();
+// function mapImagePixelToCanvasPoint(imageX, imageY) {
+//     const canvasRect = mapCanvas.getBoundingClientRect();
 
-    const canvasWidth = canvasRect.width;
-    const canvasHeight = canvasRect.height;
+//     const canvasWidth = canvasRect.width;
+//     const canvasHeight = canvasRect.height;
 
-    const imageWidth = mapImage.naturalWidth;
-    const imageHeight = mapImage.naturalHeight;
+//     const imageWidth = mapImage.naturalWidth;
+//     const imageHeight = mapImage.naturalHeight;
 
-    const imageRatio = imageWidth / imageHeight;
-    const canvasRatio = canvasWidth / canvasHeight;
+//     const imageRatio = imageWidth / imageHeight;
+//     const canvasRatio = canvasWidth / canvasHeight;
 
-    let drawWidth;
-    let drawHeight;
-    let offsetX;
-    let offsetY;
+//     let drawWidth;
+//     let drawHeight;
+//     let offsetX;
+//     let offsetY;
 
-    if (canvasRatio > imageRatio) {
-        drawHeight = canvasHeight;
-        drawWidth = drawHeight * imageRatio;
-        offsetX = (canvasWidth - drawWidth) / 2;
-        offsetY = 0;
-    } else {
-        drawWidth = canvasWidth;
-        drawHeight = drawWidth / imageRatio;
-        offsetX = 0;
-        offsetY = (canvasHeight - drawHeight) / 2;
-    }
+//     if (canvasRatio > imageRatio) {
+//         drawHeight = canvasHeight;
+//         drawWidth = drawHeight * imageRatio;
+//         offsetX = (canvasWidth - drawWidth) / 2;
+//         offsetY = 0;
+//     } else {
+//         drawWidth = canvasWidth;
+//         drawHeight = drawWidth / imageRatio;
+//         offsetX = 0;
+//         offsetY = (canvasHeight - drawHeight) / 2;
+//     }
 
-    return {
-        x: offsetX + (imageX / imageWidth) * drawWidth,
-        y: offsetY + (imageY / imageHeight) * drawHeight
-    };
-}
+//     return {
+//         x: offsetX + (imageX / imageWidth) * drawWidth,
+//         y: offsetY + (imageY / imageHeight) * drawHeight
+//     };
+// }
 
 function drawRouteLine(ctx, points) {
     if (points.length < 2) {
