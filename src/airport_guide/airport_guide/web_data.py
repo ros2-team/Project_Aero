@@ -67,7 +67,7 @@ class WebBridgeNode(Node):
                                         "location_name": "Corner_Mid_Point",
                                         "x": 2.9,   # 현장 장애물 맵 정보에 기반한 커스텀 우회 X 좌표
                                         "y": -0.4,  # 현장 장애물 맵 정보에 기반한 커스텀 우회 Y 좌표
-                                        "is_mid_point": True  # 💡 중간 경유지임을 구별하기 위해 추가한 커스텀 메타데이터 태그
+                                        "is_mid_point": True  # 중간 경유지임을 구별하기 위해 추가한 커스텀 메타데이터 태그
                                     }
                                     processed_route.append(mid_wp)
                                     self.get_logger().info("🔄 [Route Planner] 'WayPoint_1' 감지 -> 직후에 코너링 우회용 중간 좌표를 계획 경로에 강제 주입했습니다.")
