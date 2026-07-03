@@ -21,7 +21,7 @@ class ArrivalNode(Node):
             qos_profile_sensor_data
         )
         
-        # 🎯 [해결 1] WebBridgeNode가 발행하는 웹 명령 토픽 직접 구독 추가
+        # [해결 1] WebBridgeNode가 발행하는 웹 명령 토픽 직접 구독 추가
         self.command_sub = self.create_subscription(
             String,
             '/web/command',
@@ -41,7 +41,8 @@ class ArrivalNode(Node):
     def web_command_callback(self, msg):
         try:
             raw_data = json.loads(msg.data)
-            action_type = raw_data.get("action")  # web_bridge가 보낸 규격 매칭
+            print("!!!!!!!!!!!!!!!!!!!!!!raw_data: ",raw_data)
+            action_type = raw_data.get("type")  # web_bridge가 보낸 규격 매칭
             
             if action_type == "navigation_route":   # 안내시작 누르면 실행 됨
                 # 웹 브릿지가 이미 blackboard.web_route_list에 데이터를 넣었으므로 플래그만 활성화

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import rclpy
 import json
+import time
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 from std_msgs.msg import Bool, String
@@ -95,15 +96,22 @@ class AirportGuideBT(Node):
         nav_br.add_child(ActionMoveToGoal("MoveToGoal"))
 
         # 최상위 Selector 자식 순서 배치
-        self.root.add_child(nav_br) 
-        self.root.add_child(battery_br)
-        self.root.add_child(sensor_br)
-        self.root.add_child(pause_br)
-        self.root.add_child(emergency_br)
-        self.root.add_child(human_hub)
-        self.root.add_child(avoid_br)
-        self.root.add_child(arrival_br)
-        self.root.add_child(ActionIdle("SystemIdle"))
+        self.root.add_child(battery_br)      # 1순위: 배터리 방전 체크 
+        self.root.add_child(sensor_br)       # 2순위: 센서 통신 끊김 체크
+        self.root.add_child(emergency_br)    # 3순위: 전방 급정거/복구 체크
+        self.root.add_child(pause_br)        # 4순위: 웹 일시정지 체크
+        self.root.add_child(human_hub)       # 5순위: 사람 유실/멀어짐 체크
+        self.root.add_child(avoid_br)        # 6순위: 장애물 회피 체크
+        self.root.add_child(arrival_br)      # 7순위: 목적지 도착 세션 체크
+        self.root.add_child(nav_br)          # 8순위: 모든 예외가 없을 때 자율주행 실행
+        self.root.add_child(ActionIdle("SystemIdle")) # 9순위: 정말 아무것도 안 할 때의 대기
+
+        # 🛠️ [추가] 웹 상태 변경 감지 및 주기 제어를 위한 변수 초기화
+        self.last_robot_status_pub_time = 0.0
+        self.last_nav_status = None
+        self.last_nav_current_index = None
+        self.last_nav_is_paused = None
+        self.last_nav_route_len = 0
 
         self.timer = self.create_timer(0.1, self.bt_tick)
 
@@ -172,34 +180,76 @@ class AirportGuideBT(Node):
             throttle_duration_sec=1.0
         )
 
+        current_time = time.time()
+
         # ---------------------------------------------------------------------
-        # 📊 1초 주기로 전처리 노드들이 쌓아둔 종합 데이터를 취합하여 웹브릿지로 발행
+        # 🛠️ [1] robot_status_state 발행 (변경과 무관하게 1초 주기로 지속 발행)
+        # ---------------------------------------------------------------------
+        if current_time - self.last_robot_status_pub_time >= 1.0:
+            try:
+                robot_status_payload = {
+                    "battery": int(getattr(self.blackboard, "battery_level", 100.0)),
+                    "x": float(getattr(self.blackboard, "current_x", 0.0)),
+                    "y": float(getattr(self.blackboard, "current_y", 0.0)),
+                    "yaw": float(getattr(self.blackboard, "current_yaw", 0.0)),
+                    "robot_status": self.blackboard.goal_state.name.lower() if self.blackboard.goal_state else "unknown",
+                    "network": "disconnected" if getattr(self.blackboard, "sensor_timeout", False) else "connected"
+                }
+                
+                msg_status = String()
+                msg_status.data = json.dumps(robot_status_payload)
+                self.bt_status_pub.publish(msg_status)
+                
+                self.last_robot_status_pub_time = current_time
+                
+            except Exception as e:
+                self.get_logger().error(f"robot_status_state 발행 실패: {e}", throttle_duration_sec=3.0)
+
+
+        # ---------------------------------------------------------------------
+        # 🛠️ [2] navigation_state 발행 (도착, 진행중, 대기 등 상태 변경 시에만 발행)
         # ---------------------------------------------------------------------
         try:
-            status_payload = {
-                "goal_state": self.blackboard.goal_state.name if self.blackboard.goal_state else "UNKNOWN",
-                "goal_name": self.blackboard.goal_name,
-                "battery_low": getattr(self.blackboard, "battery_low", False),
-                "battery_level": getattr(self.blackboard, "battery_level", 100.0),
-                "odom_pose": {
-                    # 🎯 blackboard.py 정의 변수명(current_x, current_y) 매핑 일치화
-                    #  getattr(A, "B", C): "A 객체 안에서 'B'라는 이름의 실시간 변수 값을 가져오되, 만약 변수가 존재하지 않으면 기본값으로 C를 반환
-                    "x": getattr(self.blackboard, "current_x", 0.0),
-                    "y": getattr(self.blackboard, "current_y", 0.0),
-                    "yaw": getattr(self.blackboard, "current_yaw", 0.0) 
-                }
-            }
-            
-            # JSON 직렬화 후 문자열 메시지로 변환 및 퍼블리시
-            msg = String()
-            msg.data = json.dumps(status_payload)
-            self.bt_status_pub.publish(msg)
-            
-        except Exception as e:
-            self.get_logger().error(f"웹 피드백 데이터 취합 및 퍼블리시 실패: {e}", throttle_duration_sec=3.0)
-        # ---------------------------------------------------------------------
+            current_nav_status = self.blackboard.goal_state.name.lower() if self.blackboard.goal_state else "idle"
+            current_route = getattr(self.blackboard, "web_route_list", [])
+            current_is_paused = getattr(self.blackboard, "is_paused", False)
+            current_index = getattr(self.blackboard, "current_waypoint_index", 0) 
 
+            # 상태값 실시간 변경 여부 가드 조건식
+            is_nav_changed = (
+                current_nav_status != self.last_nav_status or
+                current_index != self.last_nav_current_index or
+                current_is_paused != self.last_nav_is_paused or
+                len(current_route) != self.last_nav_route_len
+            )
+
+            if is_nav_changed:
+                navigation_payload = {
+                    "status": current_nav_status,
+                    "type": getattr(self.blackboard, "web_action", None),
+                    "route": current_route,
+                    "current_index": current_index,
+                    "is_paused": current_is_paused
+                }
+                
+                msg_nav = String()
+                msg_nav.data = json.dumps(navigation_payload)
+                self.bt_status_pub.publish(msg_nav)
+                
+                self.get_logger().info(f"📢 [웹 피드백] navigation_state 변경 발송 -> status: {current_nav_status}")
+                
+                # 다음 주기를 위한 상태 백업 동기화
+                self.last_nav_status = current_nav_status
+                self.last_nav_current_index = current_index
+                self.last_nav_is_paused = current_is_paused
+                self.last_nav_route_len = len(current_route)
+
+        except Exception as e:
+            self.get_logger().error(f"navigation_state 발행 실패: {e}", throttle_duration_sec=3.0)
+
+        # ---------------------------------------------------------------------
         # 실제 행동트리 실행
+        # ---------------------------------------------------------------------
         self.root.tick(self.blackboard, self)
 
 
@@ -218,7 +268,7 @@ def main(args=None):
     web_pause = WebPauseNode(shared_blackboard)
 
 
-    # 2. 멀티스레드 익스큐터에 실물 노드 5개 등록
+    # 2. 멀티스레드 익스큐터에 실물 노드 6개 등록
     executor = MultiThreadedExecutor()
     executor.add_node(web_bridge_node)
     executor.add_node(bt_node)

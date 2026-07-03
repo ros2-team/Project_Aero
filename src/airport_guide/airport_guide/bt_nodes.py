@@ -183,7 +183,7 @@ class ActionMoveToGoal(BTNode):
         
         # Nav2 액션 서버로 목표 전송 (내부적으로 SENT 상태 기록 등 수행)
         ros_node.send_nav_goal(blackboard.goal_x, blackboard.goal_y)
-        
+        return "RUNNING"
 
 # 7. 기본 정적 대기 브랜치
 class ActionIdle(BTNode):

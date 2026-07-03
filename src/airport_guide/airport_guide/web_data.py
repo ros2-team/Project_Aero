@@ -16,8 +16,8 @@ class WebBridgeNode(Node):
         self.last_handled_command_id = -1             
         self.polling_interval = 0.5                   
         
-        # 추가-> 이전 상태를 기억하여 변경 감지용 버퍼 변수 선언
-        self.last_goal_state = None
+        # 🛠️ 수정한 규격에 맞게 내비게이션 상태만 변경 감지하기 위한 변수
+        self.last_nav_status = None
         
         self.web_command_pub = self.create_publisher(String, "/web/command", 10)
         
@@ -55,9 +55,6 @@ class WebBridgeNode(Node):
                                 "\n" + "="*60
                             )
 
-                            # -------------------------------------------------------------------------
-                            # [Route Planner 레이어 기동] 중간 우회 좌표 동적 주입 인터셉터
-                            # -------------------------------------------------------------------------
                             raw_route = command_data.get("route", [])
                             processed_route = []
 
@@ -116,44 +113,46 @@ class WebBridgeNode(Node):
         except Exception as e:
             self.get_logger().error(f"처리 완료 보고 중 예외 발생: {e}")
 
-    # 웹 상태랑 블래보드 상태 규격 정리?,,,,?
-    # 웹 상태 알아와서 수정하기...
-    # WEB_STATE_MAPPING = {
-    #     "IDLE": "idle",
-    #     "SENT": "running",       # 액션을 보낸 순간부터 웹에는 주행 중으로 표시
-    #     "RUNNING": "running",
-    #     "CANCELING": "idle",     # 취소 중일 때는 대기 상태에 준함
-    #     "DONE": "finish"         # 로봇의 DONE을 웹이 원하는 "finish"로 변환!
-    # }
-
     def _bt_status_callback(self, msg: String):
-        """행동트리 상태 토픽을 수신하여 상태가 '변경되었을 때만' Flask 서버로 HTTP POST 전송"""
+        """행동트리 상태 토픽을 구조별로 분류하여 Flask로 전달"""
         try:
-            bt_data = json.loads(msg.data)      # 행동트리가 쏜 JSON 문자열 데이터를 파이썬이 읽을 수 있는 딕셔너리(bt_data)로 변환
-            current_state = bt_data.get("goal_state")
+            bt_data = json.loads(msg.data)
+            headers = {"Content-Type": "application/json"}
 
-            # [핵심 로직] 상태가 이전과 같으면 Flask 전송을 건너뛰고 무시합니다.
-            if current_state == self.last_goal_state:
+            # 🛠️ [구조 분류 1] robot_status_state 처리 (1초 주기 데이터)
+            if "robot_status" in bt_data:
+                # 1초 주기로 들어오는 데이터는 상태 중복 체크 없이 '무조건' 전송해야 함
+                url = f"{self.flask_base_url}/api/robot/status"  # Flask 측 로봇 상태 수신 주소
+                res = requests.post(url, data=json.dumps(bt_data), headers=headers, timeout=1.0)
+                
+                if res.status_code != 200:
+                    self.get_logger().error(f"robot_status_state 전송 실패 (HTTP: {res.status_code})")
                 return
 
-            # 상태가 변경된 경우 로그 기록 및 전송 프로세스 진행
-            self.get_logger().info(
-                "\n" + "="*50 +
-                f"\n🔄 [상태 변경 감지] {self.last_goal_state} -> {current_state}" +
-                f"\n{json.dumps(bt_data, indent=2, ensure_ascii=False)}" +
-                "\n" + "="*50
-            )
-            
-            url = f"{self.flask_base_url}/api/navigation/update"
-            headers = {"Content-Type": "application/json"}
-            
-            res = requests.post(url, data=json.dumps(bt_data), headers=headers, timeout=1.0)
-            if res.status_code == 200:
-                self.get_logger().info(f"Flask에 로봇 실시간 상태 변경 보고 성공: {bt_data}")
-                # 전송 성공 시 최신 상태를 백업하여 다음 중복을 방지합니다.
-                self.last_goal_state = current_state
-            else:
-                self.get_logger().error(f"상태 변경 보고 실패 (HTTP 상태 코드: {res.status_code})")
+            # 🛠️ [구조 분류 2] navigation_state 처리 (이벤트성 변경 데이터)
+            elif "status" in bt_data:
+                current_nav_status = bt_data.get("status")
+
+                # 상태가 이전과 정확히 같으면 Flask 전송 패스
+                if current_nav_status == self.last_nav_status:
+                    return
+
+                self.get_logger().info(
+                    "\n" + "="*50 +
+                    f"\n🔄 [내비게이션 상태 변경 감지] {self.last_nav_status} -> {current_nav_status}" +
+                    f"\n{json.dumps(bt_data, indent=2, ensure_ascii=False)}" +
+                    "\n" + "="*50
+                )
+                
+                url = f"{self.flask_base_url}/api/navigation/update"
+                res = requests.post(url, data=json.dumps(bt_data), headers=headers, timeout=1.0)
+                
+                if res.status_code == 200:
+                    self.get_logger().info(f"Flask에 내비게이션 상태 변경 보고 성공: {bt_data}")
+                    self.last_nav_status = current_nav_status
+                else:
+                    self.get_logger().error(f"내비게이션 상태 보고 실패 (HTTP: {res.status_code})")
+
         except Exception as e:
             self.get_logger().error(f"로봇 상태 업데이트 보고 중 오류 발생: {e}")
 
