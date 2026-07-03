@@ -34,6 +34,7 @@ let currentRobotPosition = {
 let isPaused = false;
 let isFinishRedirecting = false;
 let navigationPath = [];
+let currentNavigationIndex = 0;
 // --------------------------------------------------------------------------------------------------------지도
 function rosToMapPixel(rosX, rosY) {
     const pixelX = (rosX - MAP_INFO.originX) / MAP_INFO.resolution;
@@ -137,8 +138,32 @@ function drawNavigationMap() {
             name: target.location_name
         });
     });
+    
+    const plannedPoints = [
+        {
+            ...currentPoint,
+            type: "current",
+            name: "현재 위치"
+        }
+    ];
+    
+    route.forEach((target, index) => {
+        if(index < currentNavigationIndex){
+            return;
+        }
+        const point = rosToCanvasPoint(
+            target.x, 
+            target.y
+        );
+        plannedPoints.push({
+            ...point,
+            type: "target",
+            name: target.location_name
+        });
+    });
+    
 
-    drawPlannedRouteLine(ctx, points);
+    drawPlannedRouteLine(ctx, plannedPoints);
 
     if (navigationPath.length > 1) {
         drawNavigationPath(ctx, navigationPath);
@@ -464,10 +489,14 @@ function updateNavigationStatus(data){
     }
 
     if(typeof data.current_index === "number"){
+        currentNavigationIndex = data.current_index;
+        
         renderRouteList(
             data.current_index,
             data.status
         );
+        
+        drawNavigationMap();
     }
 }
 
