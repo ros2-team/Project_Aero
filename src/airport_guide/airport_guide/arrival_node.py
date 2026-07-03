@@ -47,8 +47,16 @@ class ArrivalNode(Node):
                 # 웹 브릿지가 이미 blackboard.web_route_list에 데이터를 넣었으므로 플래그만 활성화
                 self.blackboard.web_action = "navigation_route"
                 self.get_logger().info("[Arrival Node] 새로운 웹 경로 명령 감지 완료.")
+                
             elif action_type == "stop_navigation":
                 self.blackboard.web_action = "stop_navigation"
+                
+            # 웹에서 '주행 재개' 버튼을 눌렀을 때 처리 루틴
+            elif action_type == "resume_navigation":
+                # 현재 블랙보드에 목적지가 남아있는데 상태가 IDLE(또는 일시정지) 상태라면
+                if self.blackboard.goal_name != "":
+                    self.blackboard.goal_state = GoalState.RUNNING
+                    self.get_logger().info(f"▶️ [Arrival Node] 주행 재개 명령 수신 -> FSM 상태를 RUNNING으로 강제 복구합니다.")
                 
         except Exception as e:
             self.get_logger().error(f"❌ [Arrival Node] 웹 명령 파싱 오류: {e}")
@@ -74,13 +82,15 @@ class ArrivalNode(Node):
             return
 
         # [안내시적] 눌렀는가?
-        is_new_route_cmd = (self.blackboard.web_action == "navigation_route") 
+        is_new_route_cmd = (self.blackboard.web_action == "navigation_route" and bool(self.blackboard.web_route_list))
         # 대기상태 & 현재 경유지도 없음 & 다음 경유지가 있음 
         is_system_idle_with_queue = (self.blackboard.goal_state == GoalState.IDLE and 
                                      self.blackboard.goal_name == "" and 
                                      bool(self.blackboard.web_route_list))
 
         if is_new_route_cmd or is_system_idle_with_queue:
+            self.get_logger().info(f"[DEBUG] 조건 진입함! 현재 남은 경로 개수: {len(self.blackboard.web_route_list)}")
+            
             if self.blackboard.web_route_list:  # 아직 남은 목적지가 있는지 
                 # 맨 앞에 잇는 목적지 꺼내와서 블랙보드 갱신 및 실행 
                 next_wp = self.blackboard.web_route_list.pop(0)
@@ -90,9 +100,13 @@ class ArrivalNode(Node):
                 self.is_current_mid_point = next_wp.get("is_mid_point", False)
                 
                 # 목표 주입 직후, RUNNING 상태로 전환
-                self.blackboard.goal_state = GoalState.RUNNING
-                self.get_logger().info(f"🌐 [Web Route] 목적지 주입 완료 ➔ 타깃: {self.blackboard.goal_name} (FSM: RUNNING)")
-                
+                self.blackboard.goal_state = GoalState.IDLE
+                self.get_logger().info(f" 목적지 주입 완료 ➔ 타깃: {self.blackboard.goal_name} (FSM: RUNNING)")
+
+            else:
+                # 🎯 [디버그 로그 추가] 리스트가 비어있어서 실패한 경우 출력
+                self.get_logger().error("[DEBUG] web_action 신호는 왔으나 web_route_list가 비어있어서 주입 실패!")
+                 
             self.blackboard.web_action = ""
 
         if self.blackboard.goal_state == GoalState.DONE:
@@ -105,12 +119,12 @@ class ArrivalNode(Node):
                 
                 # 릴레이 경유지 교체 시점에도 즉시 RUNNING 상태로 인계하여 계측 루프 차단 방지
                 self.blackboard.goal_state = GoalState.RUNNING
-                self.get_logger().info(f"🚗 [Route Relay] 다음 경유지 이동 시작: {self.blackboard.goal_name} (FSM: RUNNING)")
+                self.get_logger().info(f"다음 경유지 이동 시작: {self.blackboard.goal_name} (FSM: RUNNING)")
             else:
                 self.blackboard.goal_name = ""
                 self.blackboard.goal_state = GoalState.IDLE
                 self.is_current_mid_point = False
-                self.get_logger().info("🎉 [Route Completed] 모든 지정 경유지 주행이 최종 완료되었습니다.")
+                self.get_logger().info("🎉 모든 지정 경유지 주행이 최종 완료되었습니다.")
                 return
 
         # ---------------------------------------------------------------------

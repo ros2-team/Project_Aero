@@ -172,16 +172,18 @@ class ConditionHasGoal(BTNode):
             return "SUCCESS"
         return "FAILURE"
 
+
 class ActionMoveToGoal(BTNode):
-
-    # [수정] '명령을 내리는 것'과 '명령이 내려졌다고 기록하는 것'을 분리한다.
-    # 이 노드는 ros_node.send_nav_goal()을 호출만 하고,
-    # 상태를 SENT로 바꾸는 책임은 send_nav_goal() 내부(test_bt.py)로 옮긴다.
-
     def tick(self, blackboard, ros_node):
         ros_node.get_logger().info(f"🚀 [주행 제어] 액션 요청 송신 -> 타깃: {blackboard.goal_name}")
+        
+        # 🛠️ [핵심 수정] Nav2 목표를 보내기 직전에 상태를 RUNNING으로 변경
+        # 이 변경으로 인해 다음 Tick부터 ConditionHasGoal 조건이 FAILURE가 되어 이 노드가 중복 호출되지 않습니다.
+        blackboard.goal_state = GoalState.RUNNING
+        
+        # Nav2 액션 서버로 목표 전송 (내부적으로 SENT 상태 기록 등 수행)
         ros_node.send_nav_goal(blackboard.goal_x, blackboard.goal_y)
-        return "RUNNING"
+        
 
 # 7. 기본 정적 대기 브랜치
 class ActionIdle(BTNode):
