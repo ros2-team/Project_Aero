@@ -15,6 +15,7 @@ setup(
         (os.path.join('share', package_name, 'worlds'), glob(os.path.join('worlds', '*.world'))),
         (os.path.join('share', package_name, 'rviz'), glob(os.path.join('rviz', '*.rviz'))),
         (os.path.join('share', package_name, 'map'), glob(os.path.join('map', '*.yaml')) + glob(os.path.join('map', '*.pgm'))),
+        (os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*launch.[pxy][yma]*'))),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -34,8 +35,12 @@ setup(
             'send_x_y = robot_test.send_x_y:main',
             'rearcam = robot_test.rearcam:main',
             'waypoint_test = robot_test.waypoint_test:main',
-            'frontrear_lidar = robot_test.front_rear_lidar:main',
-            'rearcam_ctrl = robot_test.rear_cam_ctrl:main'
+            'front_rear_lidar = robot_test.front_rear_lidar:main',
+            'rearcam_ctrl = robot_test.rearcam_ctrl:main',
+            'test_bt = robot_test.test_bt:main',
+            'arrival_node = robot_test.arrival_node:main',
+            'front_came_node = robot_test.front_cam_node:main',
+            'battery_node = robot_test.battery_node:main'
         ],
     },
 )

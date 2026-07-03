@@ -10,9 +10,10 @@ from std_msgs.msg import Float32MultiArray
 from geometry_msgs.msg import Twist
 
 class ControlNode(Node):
-    def __init__(self):
+    def __init__(self, blackboard):
         super().__init__('control_node')
-        
+
+        self.blackboard = blackboard
         ### 타겟 바운딩 박스 xmin, centerx, xmax 구독
         self.box_sub = self.create_subscription(Float32MultiArray, '/target/bounding_box_x', self.box_callback, 10)
 
@@ -29,7 +30,8 @@ class ControlNode(Node):
         self.xmax = None
         self.angles = None
         self.distances = None
-        
+
+        self.get_logger().info(" 후방 카메라 가동!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     ### 바운딩 박스의 xmin, xmax, center x값 저장
     def box_callback(self, data):
         if data is None:
@@ -105,7 +107,7 @@ class ControlNode(Node):
             else:
                 ### 적정 거리 유지 중
                 self.get_logger().info(f" 적정 거리 유지 중 {min_dist:.1f}cm")
-                
+                self.human_lost = False
         else:
             pass
 
@@ -119,7 +121,11 @@ class ControlNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = ControlNode()
+
+    from robot_test.blackboard import Blackboard
+    db = Blackboard()
+
+    node = ControlNode(blackboard = db)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
