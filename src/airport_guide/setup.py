@@ -28,6 +28,7 @@ setup(
             'arrival_node = airport_guide.arrival_node:main',
             'front_came_node = airport_guide.front_cam_node:main',
             'battery_node = airport_guide.battery_node:main',
+            'web_data = airport_guide.web_data:main'
         ],
     },
 )

@@ -80,7 +80,7 @@ class WebBridgeNode(Node):
                                     self.get_logger().info(f"🔄 [Route Planner] '{wp.get('location_name')}' 감지 -> 코너링 우회용 중간 좌표를 경로 시퀀스에 강제 주입했습니다.")
                                     
                                     ### [STEP 1] 완성된 경로를 Nav2에 보내서 선(Path)으로 그려달라고 요청하기
-                                    
+
                             poses_for_nav2 = []
                             for p_wp in processed_route:
                                 pose = PoseStamped()
@@ -129,6 +129,7 @@ class WebBridgeNode(Node):
                 "route": command_data.get("route", [])
             }
         })
+        print("웹에서 보내는 좌표입니다 !!!!!!!!!!!!!!!!", msg)
         self.web_command_pub.publish(msg)
         self.get_logger().info("행동트리 수신용 ROS2 토픽 발행 완료.")
 
@@ -146,17 +147,18 @@ class WebBridgeNode(Node):
         except Exception as e:
             self.get_logger().error(f"처리 완료 보고 중 예외 발생: {e}")
 
-    # def _bt_status_callback(self, msg: String):
-    #     try:
-    #         bt_data = json.loads(msg.data)
-    #         url = f"{self.flask_base_url}/api/navigation/update"
-    #         headers = {"Content-Type": "application/json"}
+    def _bt_status_callback(self, msg: String):
+        try:
+            bt_data = json.loads(msg.data)
+            url = f"{self.flask_base_url}/api/navigation/update"
+            headers = {"Content-Type": "application/json"}
             
-    #         res = requests.post(url, data=json.dumps(bt_data), headers=headers, timeout=1.0)
-    #         if res.status_code == 200:
-    #             self.get_logger().info(f"Flask에 로봇 실시간 상태 변경 보고 성공: {bt_data}")
-    #     except Exception as e:
-    #         self.get_logger().error(f"로봇 상태 업데이트 보고 중 오류 발생: {e}")
+            res = requests.post(url, data=json.dumps(bt_data), headers=headers, timeout=1.0)
+            if res.status_code == 200:
+                # self.get_logger().info(f"Flask에 로봇 실시간 상태 변경 보고 성공: {bt_data}")
+                pass
+        except Exception as e:
+            self.get_logger().error(f"로봇 상태 업데이트 보고 중 오류 발생: {e}")
 
     def _send_path_to_flask(self, path):
         """Nav2에서 연산된 전체 Global Path를 수신하여 Flask 서버로 HTTP POST 전송"""
@@ -221,10 +223,10 @@ class WebBridgeNode(Node):
             x = pose_stamped.pose.position.x
             y = pose_stamped.pose.position.y
             self.get_logger().info(f"   -> Pose {i+1}: x={x:.3f}, y={y:.3f}")
-        self.get_logger().info(f" {type(path)}  -> ...) ...")
+        # self.get_logger().info(f" {type(path)}  -> ...) ...")
         ### 웹으로 보내는 함수 호출 !!
         self._send_path_to_flask(path)
-
+        
 def main(args=None):
     rclpy.init(args=args)
     from airport_guide.blackboard import Blackboard

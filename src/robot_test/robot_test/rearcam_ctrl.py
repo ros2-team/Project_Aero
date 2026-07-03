@@ -6,14 +6,13 @@ from rclpy.qos import qos_profile_sensor_data
 import math
 from robot_test_msgs.msg import LidarScanData
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
-from std_msgs.msg import Float32MultiArray
+from std_msgs.msg import Float32MultiArray, Bool
 from geometry_msgs.msg import Twist
 
 class ControlNode(Node):
-    def __init__(self, blackboard):
+    def __init__(self):
         super().__init__('control_node')
 
-        self.blackboard = blackboard
         ### 타겟 바운딩 박스 xmin, centerx, xmax 구독
         self.box_sub = self.create_subscription(Float32MultiArray, '/target/bounding_box_x', self.box_callback, 10)
 
@@ -21,7 +20,7 @@ class ControlNode(Node):
         self.scan_sub = self.create_subscription(LidarScanData, '/scan/rear', self.lidar_callback, qos_profile_sensor_data)
 
         ### cmd_vel 값 publish
-        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.human_status_pub = self.create_publisher(Bool, "/perception/human_far", 10)
 
         ### timer콜백함수 정의
         self.timer_period = 0.1
@@ -99,33 +98,33 @@ class ControlNode(Node):
                 ### 사용자가 120cm이상 너무 멀어지면
                 self.get_logger().warn(f" 사용자 멀어짐 {min_dist:.1f}cm" )
 
-                self.human_lost = True
-
+                self.human_far = True
+                self.publish_human_status(True)
                 # ### 전후진(x)과 회전(z) 속도를 0으로 설정하여 멈춤
                 # self.cmd_pub()
 
             else:
                 ### 적정 거리 유지 중
                 self.get_logger().info(f" 적정 거리 유지 중 {min_dist:.1f}cm")
-                self.human_lost = False
+                self.human_far = False
         else:
             pass
 
-    # def cmd_pub(self):
-    #     self.get_logger().info(" 로봇이 일시 정지 합니다.")
-    #     twist_msg = Twist()
-    #     twist_msg.linear.x = 0.0
-    #     twist_msg.angular.z = 0.0
-    #     self.cmd_vel_pub.publish(twist_msg)
+    def publish_human_status(self, is_far: bool):
+        msg = Bool()
+        msg.data = is_far
+        self.human_status_pub.publish(msg)
+        
+        # 값이 잘 날아가는지 터미널에서 확인하기 위한 로그
+        if is_far:
+            self.get_logger().info("📤 [Pub] human_lost 토픽 발행: True (정지 요청)")
+        else:
+            self.get_logger().info("📤 [Pub] human_lost 토픽 발행: False (추종 계속)")
 
 
 def main(args=None):
     rclpy.init(args=args)
-
-    from airport_guide.blackboard import Blackboard
-    db = Blackboard()
-
-    node = ControlNode(blackboard = db)
+    node = ControlNode()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
