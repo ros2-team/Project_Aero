@@ -122,7 +122,7 @@ class ControlNode(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    from robot_test.blackboard import Blackboard
+    from airport_guide.blackboard import Blackboard
     db = Blackboard()
 
     node = ControlNode(blackboard = db)
