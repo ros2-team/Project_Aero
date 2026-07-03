@@ -30,6 +30,7 @@ from airport_guide.bt_nodes import (
 from airport_guide.battery_node import BatteryNode
 from airport_guide.arrival_node import ArrivalNode
 from airport_guide.front_cam_node import FrontCameraNode
+from airport_guide.web_pause import WebPauseNode
 
 
 class AirportGuideBT(Node):
@@ -214,6 +215,8 @@ def main(args=None):
     battery_node = BatteryNode(shared_blackboard)
     arrival_node = ArrivalNode(shared_blackboard)
     front_cam_node = FrontCameraNode(shared_blackboard)
+    web_pause = WebPauseNode(shared_blackboard)
+
 
     # 2. 멀티스레드 익스큐터에 실물 노드 5개 등록
     executor = MultiThreadedExecutor()
@@ -221,7 +224,8 @@ def main(args=None):
     executor.add_node(bt_node)
     executor.add_node(battery_node)
     executor.add_node(arrival_node)
-    executor.add_node(front_cam_node)
+    executor.add_node(front_cam_node)  
+    executor.add_node(web_pause) 
 
     try:
         # 단일 프로세스로 병렬 가동 시작
@@ -235,6 +239,7 @@ def main(args=None):
         battery_node.destroy_node()
         arrival_node.destroy_node()
         front_cam_node.destroy_node()
+        web_pause.destroy_node()
         rclpy.shutdown()
 
 if __name__ == '__main__':

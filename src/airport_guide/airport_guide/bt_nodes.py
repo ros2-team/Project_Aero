@@ -60,21 +60,33 @@ class ActionSensorEmergencyStop(BTNode):
         ros_node.get_logger().error("⚠️ [CRITICAL] 센서 데이터 유실 상태. 주행 정지 유도.", throttle_duration_sec=2.0)
         ros_node.cancel_nav_goal()
         return "RUNNING"
-
-# 1.5. 일시정지 브랜치
+    
+# 1.5. 일시정지 브랜치 노드 
 class ConditionWebPause(BTNode):
     def tick(self, blackboard, ros_node):
+        # web_pause_node가 전처리해서 넣어준 플래그를 읽어서 판단
         return "SUCCESS" if blackboard.is_paused else "FAILURE"
 
 class ActionWebPauseStop(BTNode):
     def tick(self, blackboard, ros_node):
-        ros_node.get_logger().warn("⏸️ [PAUSE] 시스템 일시정지 상태 유지 중.", throttle_duration_sec=3.0)
+        ros_node.get_logger().warn("[PAUSE]시스템 일시정지", throttle_duration_sec=3.0)
+        
+        # 실제 물리 제어(Nav2 목표 취소)는 ros_node의 매서드를 호출하여 처리
+        # 로봇 속도 알아서 0으로 떨어짐 
         ros_node.cancel_nav_goal()
+        
+        # web)pause 에서 goal_name 을 ""를 지우면 
+        if blackboard.goal_name == "":
+            ros_node.set_goal_state(GoalState.IDLE)
+            blackboard.is_paused = False # 초기화 완료 후 다음 주행을 위해..서.. 
+            return "SUCCESS"
+            
         return "RUNNING"
+
 
 # 2. 전방 충돌 방지 브랜치
 class ConditionEmergency(BTNode):
-    # [수정] 이제 이 노드는 순수하게 '지금 위험한가?'만 판단한다.
+    # 이제 이 노드는 순수하게 '지금 위험한가?'만 판단한다.
     # 위험 해제 후의 복구(재출발 준비) 로직은 별도 Action 노드로 분리했다.
     # Condition은 상태를 절대 바꾸지 않고 SUCCESS/FAILURE만 보고한다.
 
