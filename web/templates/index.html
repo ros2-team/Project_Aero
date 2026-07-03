@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>로봇 길안내 경로 설정</title>
+
+    <link rel="icon" href="data:,">
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* ===================================================
+           💡 [팀 공용 규격] 전체 공통 리셋 및 변수 설정
+        =================================================== */
+        :root {
+            --airport-bg-color: #0a0f1d;
+            --airport-text-primary: #ffffff;
+            --airport-text-secondary: #a0aec0;
+            --airport-accent-cyan: #00e5ff;
+            --airport-btn-gradient: linear-gradient(135deg, #0055ff 0%, #00d2ff 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: var(--airport-bg-color);
+            color: var(--airport-text-primary);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 20px;
+        }
+
+        /* ===================================================
+           컴포넌트 스타일 레이아웃 (공용 변수 대입)
+        =================================================== */
+        h1 { margin-bottom: 25px; font-size: 22px; color: var(--airport-text-primary); font-weight: 700; }
+        
+        /* 좌우 레이아웃 분할 */
+        .container { display: flex; flex: 1; gap: 20px; min-height: 0; }
+        
+        /* 💡 패널 배경색 및 보더를 팀 변수 기준으로 자연스럽게 조정 */
+        .panel { flex: 1; background: #131a26; border-radius: 8px; border: 1px solid #1f293d; padding: 25px; display: flex; flex-direction: column; }
+        .panel h2 { font-size: 16px; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid #1f293d; color: var(--airport-text-primary); font-weight: 500; }
+        
+        /* 리스트 스타일 */
+        .list-container { flex: 1; overflow-y: auto; list-style: none; }
+        
+        /* 💡 리스트 내부의 카드 컴포넌트 색상 보정 */
+        .item { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; margin-bottom: 12px; background: #182232; border: 1px solid #243247; border-radius: 6px; cursor: pointer; transition: background 0.2s; }
+        .item:hover { background: #1f2b3f; }
+        .item strong { color: var(--airport-text-primary); font-size: 14px; display: block; margin-bottom: 4px; }
+        .item small { color: var(--airport-text-secondary); font-size: 12px; }
+        
+        /* 오른쪽 선택된 장소 컴포넌트 */
+        .selected-item { cursor: default; background: #1c2b42; border-color: #3b5984; }
+        .selected-item:hover { background: #1c2b42; }
+        .btn-group { display: flex; gap: 6px; }
+        
+        /* 기본 컨트롤 버튼 스타일 */
+        button { padding: 6px 14px; border: 1px solid #334155; background: #1e293b; color: var(--airport-text-primary); border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.2s; }
+        button:hover { background: #334155; }
+        
+        /* 기능성 버튼 색상 선언 */
+        .btn-add { background: #22c55e; color: white; border: none; }
+        .btn-add:hover { background: #16a34a; }
+        .btn-delete { background: #ef4444; color: white; border: none; }
+        .btn-delete:hover { background: #dc2626; }
+        
+        /* 하단 액션 바 */
+        .action-bar { margin-top: 20px; display: flex; justify-content: flex-end; }
+        
+        /* 💡 [우측 하단 버튼] 팀 공용 그라디언트(`--airport-btn-gradient`)를 적용하여 완벽 연동 */
+        .btn-start { padding: 14px 28px; font-size: 15px; font-weight: bold; background: var(--airport-btn-gradient); color: var(--airport-text-primary); border: none; border-radius: 6px; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 85, 255, 0.3); transition: opacity 0.2s; }
+        .btn-start:hover { opacity: 0.9; }
+    </style>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+</head>
+<body>
+
+    <h1>📍 로봇 경유지 지정 시스템</h1>
+
+    <div class="container">
+        <div class="panel">
+            <h2>전체 장소 목록</h2>
+            <ul id="placeList" class="list-container"></ul>
+        </div>
+
+        <div class="panel">
+            <h2>설정된 경로 (순서)</h2>
+            <ol id="selectedList" class="list-container"></ol>
+        </div>
+    </div>
+
+    <div class="action-bar">
+        <button class="btn-start" onclick="startNavigation()">🚀 길안내 시작</button>
+    </div>
+
+    <script src="{{ url_for('static', filename='index.js') }}"></script>
+</body>
+</html>
