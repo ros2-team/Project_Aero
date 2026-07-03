@@ -44,7 +44,8 @@ robot_status_state = {          #내가 받아올 데이터 값
 }
 
 navigation_path_state = {
-    "path" : []                 #설정한 경로 값
+    "path" : [],                #설정한 경로 값
+    "segments" : [] 
 }
 
 #   function    ---------------------------------------------------------------------------------------------
@@ -70,7 +71,8 @@ def emit_navigation_path():
     socketio.emit(
         "navigation_path",
         {
-            "path" : navigation_path_state["path"]
+            "path" : navigation_path_state["path"],
+            "segments" : navigation_path_state["segments"]
         }
     )
 def send_route_to(route_type, navigation_route):
@@ -124,6 +126,11 @@ def send_control_to(command_type):
         "type": command_type,
         "route": []
     }
+
+def reset_navigation_path():
+    navigation_path_state["path"] = [];
+    navigation_path_state["segments"] = [];
+    emit_navigation_path()
 
 #   flask socketio    ---------------------------------------------------------------------------------------------    
 @socketio.on("connect")
@@ -253,7 +260,9 @@ def start_navigation():
     print("최종 경로")
     for route in navigation_route:
         print(route)
-
+    
+    reset_navigation_path()
+    
     send_route_to("navigation_route", navigation_route)
 
     return jsonify({
@@ -305,6 +314,8 @@ def stop_navigation():
     navigation_state["route"] = []
     navigation_state["current_index"] = 0
     navigation_state["is_paused"] = False
+
+    reset_navigation_path()
 
     send_control_to("stop_navigation")
     emit_navigation_state()
@@ -372,6 +383,7 @@ def reset_navigation():
     navigation_state["current_index"] = 0
     navigation_state["is_paused"] = False
 
+    reset_navigation_path
     emit_navigation_state()
 
     return jsonify({
@@ -380,34 +392,112 @@ def reset_navigation():
         "navigation_state" : navigation_state
     })   
 
-@app.route("/api/navigation/path", methods = ["POST"])
+@app.route("/api/navigation/path", methods=["POST"])
 def update_navigation_path():
-    data = request.get_json()
-    path = data.get("path")
 
-    if not isinstance(path, list):
+    data = request.get_json(silent=True)
+
+    print("========== /api/navigation/path ==========")
+    print("raw data:", data)
+
+    if data is None:
         return jsonify({
-            "status" : "error",
-            "message" : "path must be list"
+            "status": "error",
+            "message": "invalid json"
         }), 400
-    
+
+    path = data.get("path", [])
+    segments = data.get("segments", [])
+
+    print("received path type:", type(path), "length:", len(path) if isinstance(path, list) else "not list")
+    print("received segments type:", type(segments), "length:", len(segments) if isinstance(segments, list) else "not list")
+
     cleaned_path = []
-    
-    for point in path:
-        if "x" not in point or "y" not in point:
-            continue
-        cleaned_path.append({
-            "x" : float(point["x"]),
-            "y" : float(point["y"])
-        })
+    cleaned_segments = []
+
+    # -------------------------------------------------
+    # 단일 path 처리
+    # -------------------------------------------------
+    if isinstance(path, list):
+        for point in path:
+            if not isinstance(point, dict):
+                continue
+
+            if "x" not in point or "y" not in point:
+                continue
+
+            cleaned_path.append({
+                "x": float(point["x"]),
+                "y": float(point["y"])
+            })
+
+    # -------------------------------------------------
+    # segments 처리
+    # -------------------------------------------------
+    if isinstance(segments, list):
+        for index, segment in enumerate(segments):
+
+            print("segment:", index, segment)
+
+            if not isinstance(segment, dict):
+                print("skip segment: not dict")
+                continue
+
+            segment_path = segment.get("path", [])
+
+            print(
+                "segment_path type:",
+                type(segment_path),
+                "length:",
+                len(segment_path) if isinstance(segment_path, list) else "not list"
+            )
+
+            if not isinstance(segment_path, list):
+                print("skip segment: path is not list")
+                continue
+
+            cleaned_segment_path = []
+
+            for point in segment_path:
+                if not isinstance(point, dict):
+                    print("skip point: not dict", point)
+                    continue
+
+                if "x" not in point or "y" not in point:
+                    print("skip point: no x or y", point)
+                    continue
+
+                cleaned_segment_path.append({
+                    "x": float(point["x"]),
+                    "y": float(point["y"])
+                })
+
+            print("cleaned_segment_path length:", len(cleaned_segment_path))
+
+            if len(cleaned_segment_path) < 2:
+                print("skip segment: path length < 2")
+                continue
+
+            cleaned_segments.append({
+                "order": int(segment.get("order", index)),
+                "from": segment.get("from", None),
+                "to": segment.get("to", None),
+                "path": cleaned_segment_path
+            })
 
     navigation_path_state["path"] = cleaned_path
-    
+    navigation_path_state["segments"] = cleaned_segments
+
+    print("cleaned_path length:", len(cleaned_path))
+    print("cleaned_segments length:", len(cleaned_segments))
+    print("==========================================")
+
     emit_navigation_path()
-    
+
     return jsonify({
-        "status" : "success",
-        "path_count" : len(cleaned_path)
+        "status": "success",
+        "path_count": len(cleaned_path),
+        "segment_count": len(cleaned_segments)
     })
 
 @app.route("/api/qrcall/callrobot", methods = ["POST"])
@@ -457,7 +547,7 @@ def callrobot_qrcall():
                 "yaw" : location["yaw"],
             }
         ]
-
+        reset_navigation_path()
         send_route_to("qrcall", qr_route)
 
         return jsonify({

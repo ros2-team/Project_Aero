@@ -182,6 +182,125 @@ def make_test_path(start_x, start_y, target_x, target_y):
 
     return path
 
+def interpolate_points(start_x, start_y, target_x, target_y, steps=10):
+    path = []
+
+    for i in range(steps + 1):
+        ratio = i / steps
+
+        x = start_x + (target_x - start_x) * ratio
+        y = start_y + (target_y - start_y) * ratio
+
+        path.append({
+            "x": x,
+            "y": y
+        })
+
+    return path
+
+
+def make_dummy_segment_path(start_x, start_y, target_x, target_y):
+    """
+    테스트용 꺾인 path 생성 함수.
+    실제 Nav2 path처럼 직선이 아니라 중간에 꺾이는 경로를 강제로 만든다.
+    """
+
+    mid_x_1 = start_x
+    mid_y_1 = (start_y + target_y) / 2
+
+    mid_x_2 = target_x
+    mid_y_2 = (start_y + target_y) / 2
+
+    waypoint_list = [
+        {
+            "x": start_x,
+            "y": start_y
+        },
+        {
+            "x": mid_x_1,
+            "y": mid_y_1
+        },
+        {
+            "x": mid_x_2,
+            "y": mid_y_2
+        },
+        {
+            "x": target_x,
+            "y": target_y
+        }
+    ]
+
+    path = []
+
+    for index in range(len(waypoint_list) - 1):
+        current = waypoint_list[index]
+        next_point = waypoint_list[index + 1]
+
+        segment_path = interpolate_points(
+            current["x"],
+            current["y"],
+            next_point["x"],
+            next_point["y"],
+            steps=8
+        )
+
+        if index > 0:
+            segment_path = segment_path[1:]
+
+        path.extend(segment_path)
+
+    return path
+
+
+def make_dummy_segments(route, start_x, start_y):
+    segments = []
+
+    current_x = start_x
+    current_y = start_y
+
+    for index, target in enumerate(route):
+        target_x = float(target["x"])
+        target_y = float(target["y"])
+
+        segment_path = make_dummy_segment_path(
+            current_x,
+            current_y,
+            target_x,
+            target_y
+        )
+
+        segments.append({
+            "order": index,
+            "from": "current" if index == 0 else route[index - 1]["location_code"],
+            "to": target["location_code"],
+            "path": segment_path
+        })
+
+        current_x = target_x
+        current_y = target_y
+
+    return segments
+
+
+def send_navigation_segments(segments):
+    try:
+        response = requests.post(
+            f"{BASE_URL}/api/navigation/path",
+            json={
+                "segments": segments
+            },
+            timeout=3
+        )
+
+        print(
+            "navigation segments:",
+            response.status_code,
+            response.text
+        )
+
+    except Exception as error:
+        print("send_navigation_segments error:", error)
+
 def simulate_navigation(route):
     if not route:
         print("empty route")
@@ -191,10 +310,18 @@ def simulate_navigation(route):
     print("route count:", len(route))
 
     # 시작 위치는 일단 첫 번째 목적지에서 조금 떨어진 위치로 가정
-    current_x = route[0]["x"] - 0.5
-    current_y = route[0]["y"] - 0.5
+    current_x = float(route[0]["x"]) - 0.5
+    current_y = float(route[0]["y"]) - 0.5
     current_yaw = 0.0
-    battery = 80
+    battery = 22
+
+    segments = make_dummy_segments(
+        route,
+        current_x,
+        current_y
+    )
+
+    send_navigation_segments(segments)
 
     send_robot_status(
         battery=battery,
@@ -232,14 +359,12 @@ def simulate_navigation(route):
 
         send_navigation_path(test_path)
 
-        points = interpolate(
+        points = make_dummy_segment_path(
             current_x,
             current_y,
             target_x,
-            target_y,
-            steps=30
+            target_y
         )
-
         for point in points:
             current_x = point["x"]
             current_y = point["y"]

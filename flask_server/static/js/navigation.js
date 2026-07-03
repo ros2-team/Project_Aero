@@ -34,7 +34,10 @@ let currentRobotPosition = {
 let isPaused = false;
 let isFinishRedirecting = false;
 let navigationPath = [];
+let navigationSegments = [];
+
 let currentNavigationIndex = 0;
+
 // --------------------------------------------------------------------------------------------------------지도
 function rosToMapPixel(rosX, rosY) {
     const pixelX = (rosX - MAP_INFO.originX) / MAP_INFO.resolution;
@@ -163,13 +166,29 @@ function drawNavigationMap() {
     });
     
 
-    drawPlannedRouteLine(ctx, plannedPoints);
+    if (navigationSegments.length > 0) {
+        drawNavigationSegments(
+          ctx,
+            navigationSegments
+        );
+    } else {
+        drawPlannedRouteLine(
+            ctx,
+            plannedPoints
+        );
 
-    if (navigationPath.length > 1) {
-        drawNavigationPath(ctx, navigationPath);
+        if (navigationPath.length > 1) {
+            drawNavigationPath(
+                ctx,
+                navigationPath
+            );
+        }
     }
 
-    drawMarkers(ctx, points);   
+    drawMarkers(
+        ctx,
+        points
+    );
 }
 
 
@@ -330,6 +349,45 @@ function drawNavigationPath(ctx, path) {
     ctx.stroke();
 }
 
+function drawPathLine(ctx, path, options = {}) {
+    if (!Array.isArray(path) || path.length < 2){
+        return;
+    }
+    const lineWidth = options.lineWidth || 5;
+    const strokeStyle = options.strokeStyle || "#0875ff";
+    const lineDash = options.lineDash || [];
+    
+    ctx.beginPath();
+    
+    path.forEach((pose, index) => {
+        const point = rosToCanvasPoint(
+            pose.x, 
+            pose.y
+        );
+        
+        if(index === 0){
+            ctx.moveTo(
+                point.x,
+                point.y
+            );
+        }
+        else{
+            ctx.lineTo(
+                point.x,
+                point.y
+            );
+        }
+    });
+    ctx.lineWidth = lineWidth;
+    ctx.strokeStyle = strokeStyle;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.setLineDash(lineDash);
+    ctx.stroke();
+    
+    ctx.setLineDash([]);
+}
+
 function findClosestPathIndex(path, robotPosition) {
     if (!Array.isArray(path) || path.length === 0) {
         return {
@@ -358,6 +416,108 @@ function findClosestPathIndex(path, robotPosition) {
         index: closestIndex,
         distance: closestDistance
     };
+}
+
+function getRemainingPath(path) {
+    if (!Array.isArray(path) || path.length < 2) {
+        return [];
+    }
+
+    const closest = findClosestPathIndex(
+        path,
+        currentRobotPosition
+    );
+
+    const MAX_PATH_DISTANCE = 0.7;
+
+    if (closest.distance > MAX_PATH_DISTANCE) {
+        return path;
+    }
+
+    const remainingPath = path.slice(
+        closest.index
+    );
+
+    if (remainingPath.length < 2) {
+        return [];
+    }
+
+    return remainingPath;
+}
+
+function drawNavigationSegments(ctx, segments) {
+    if (!Array.isArray(segments) || segments.length === 0) {
+        return false;
+    }
+
+    const sortedSegments = [...segments].sort((a, b) => {
+        return a.order - b.order;
+    });
+
+    let currentSegment = null;
+
+    /*
+        1단계:
+        남은 구간을 먼저 연한 회색 점선으로 그림
+        이미 지나간 구간은 그리지 않음
+        현재 구간은 나중에 진한 파란선으로 그리기 위해 따로 저장
+    */
+    sortedSegments.forEach((segment) => {
+        if (!Array.isArray(segment.path) || segment.path.length < 2) {
+            return;
+        }
+
+        const segmentOrder = Number(segment.order);
+
+        // 이미 지나간 구간
+        if (segmentOrder < currentNavigationIndex) {
+            return;
+        }
+
+        // 현재 이동 중인 구간
+        if (segmentOrder === currentNavigationIndex) {
+            currentSegment = segment;
+            return;
+        }
+
+        // 앞으로 남은 구간
+        drawPathLine(
+            ctx,
+            segment.path,
+            {
+                lineWidth: 3,
+                strokeStyle: "rgba(80, 90, 110, 0.35)",
+                lineDash: [6, 8]
+            }
+        );
+    });
+
+    /*
+        2단계:
+        현재 구간을 마지막에 진한 파란선으로 그림
+        그래야 회색선에 덮이지 않음
+    */
+    if (
+        currentSegment &&
+        Array.isArray(currentSegment.path) &&
+        currentSegment.path.length >= 2
+    ) {
+        const remainingPath = getRemainingPath(
+            currentSegment.path
+        );
+
+        drawPathLine(
+            ctx,
+            remainingPath,
+            {
+                lineWidth: 6,
+                strokeStyle: "#0875ff",
+                lineDash: []
+            }
+        );
+    }
+
+    return true;
 }
 
 // --------------------------------------------------------------------------------------------------------
@@ -478,7 +638,6 @@ function updateNavigationStatus(data){
     }
     else if(data.status === "finished"){
         socketStatus.innerText = "안내 완료";
-
         if(!isFinishRedirecting){
             isFinishRedirecting = true;
             moveToFinishPage();
@@ -486,6 +645,11 @@ function updateNavigationStatus(data){
     }
     else {
         socketStatus.innerText = data.status;
+    }
+
+    if(data.status === "stopped" || data.status === "finished" || data.status === "idle"){
+        navigationPath = [];
+        navigationSegments = [];
     }
 
     if(typeof data.current_index === "number"){
@@ -531,16 +695,31 @@ function connectSocket() {
     socket.on("robot_status", (data) => {
         console.log("robot_status", data);
         updateRobotStatus(data);
-    })
-
+    });
     socket.on("navigation_path", (data) => {
         console.log("navigation_path", data);
-        if(Array.isArray(data.path)){
-            navigationPath = data.path;
-            drawNavigationMap();
-        }
-    })
 
+        if (
+            Array.isArray(data.path) &&
+            data.path.length > 0
+        ) {
+            navigationPath = data.path;
+        }
+
+        if (
+            Array.isArray(data.segments) &&
+            data.segments.length > 0
+        ) {
+            navigationSegments = data.segments;
+        }
+
+        console.log(
+            "navigationSegments length:",
+            navigationSegments.length
+        );
+
+        drawNavigationMap();
+    });
 }
 
 function renderRouteList(currentIndex = 0, navigationStatus = "moving") {
