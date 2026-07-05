@@ -115,6 +115,7 @@ class ArrivalNode(Node):
                  
             self.blackboard.web_action = ""
             return
+        
         if self.blackboard.goal_state == GoalState.DONE:
             if self.blackboard.web_route_list:
                 next_wp = self.blackboard.web_route_list.pop(0)

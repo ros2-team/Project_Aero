@@ -44,6 +44,7 @@ class FrontCameraNode(Node):
         self.last_results = None
 
         self.get_logger().info("✅ [Data Layer] Front Camera YOLO 노드가 가동되었습니다.")
+        
     def human_status_cb(self, data):
         self.blackboard.human_far = data.data
 

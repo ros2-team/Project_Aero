@@ -12,7 +12,9 @@ class WebBridgeNode(Node):
         super().__init__("web_bridge_node")
         self.blackboard = blackboard 
         
-        self.flask_base_url = "http://192.168.0.9:5000" 
+        ### 서버 주소
+        self.flask_base_url = "http://192.168.0.9:5000  " 
+        ###
         self.last_handled_command_id = -1             
         self.polling_interval = 0.5                   
         
@@ -24,6 +26,10 @@ class WebBridgeNode(Node):
         self.bt_status_sub = self.create_subscription(
             String, "/robot/bt_status", self._bt_status_callback, 10
         )
+
+        # (기존 코드 어딘가에 추가)
+        self.full_path_sub = self.create_subscription(String, '/robot/full_path', self._full_path_callback, 10)
+
         self.get_logger().info("확정 API 기반 ROS2 Web Bridge Node 가동 시작.")
         
         self.polling_thread = threading.Thread(target=self._command_polling_loop, daemon=True)
@@ -55,21 +61,52 @@ class WebBridgeNode(Node):
                                 "\n" + "="*60
                             )
 
+                            ############## 경로 보정 ###############
                             raw_route = command_data.get("route", [])
                             processed_route = []
 
-                            for wp in raw_route:
-                                processed_route.append(wp)
+                            # 경로 리스트를 돌면서 중간 경유지 자동 주입
+                            for i in range(len(raw_route)):
+                                current_wp = raw_route[i]
+                                processed_route.append(current_wp)  # 현재 위치 추가
                                 
-                                if wp.get("location_name") == "WayPoint_1":
-                                    mid_wp = {
-                                        "location_name": "Corner_Mid_Point",
-                                        "x": 2.9,   
-                                        "y": -0.4,  
-                                        "is_mid_point": True  
-                                    }
-                                    processed_route.append(mid_wp)
-                                    self.get_logger().info("🔄 [Route Planner] 'WayPoint_1' 감지 -> 직후에 코너링 우회용 중간 좌표를 계획 경로에 강제 주입했습니다.")
+                                # 마지막 목적지가 아니라면, '현재 위치'와 '다음 위치' 사이의 이동을 검사
+                                if i < len(raw_route) - 1:
+                                    current_name = current_wp.get("location_name")
+                                    next_name = raw_route[i+1].get("location_name")
+                                    current_order = current_wp.get("order", 0)
+                                    
+                                    # 🚦 1. Gate A ↔ C 또는 Gate B ↔ C 구간인 경우 -> Right 경유지 주입
+                                    if (current_name == "Gate_A" and next_name == "Gate_C") or \
+                                       (current_name == "Gate_C" and next_name == "Gate_A") or \
+                                       (current_name == "Gate_B" and next_name == "Gate_C") or \
+                                       (current_name == "Gate_C" and next_name == "Gate_B"):
+                                        
+                                        right_mid = {
+                                            "order": current_order,          # 에러 방지용 순서 동기화
+                                            "location_code": "MID_RIGHT",   # 에러 방지용 더미 코드
+                                            "location_name": "Corner_Right_Mid",
+                                            "x": 0.6,
+                                            "y": 0.0,
+                                            "yaw": 0.0,                     # 에러 방지용 더미 방향
+                                            "is_mid_point": True
+                                        }
+                                        processed_route.append(right_mid)
+                                        self.get_logger().info(f"🔄 [Route Planner] {current_name} ↔ {next_name} (특수구간) -> Right 경유지 강제 주입")
+                                    
+                                    # 🚦 2. 화장실, 면세점 등 그 외의 모든 구간 -> 무조건 Left 경유지 주입
+                                    else:
+                                        left_mid = {
+                                            "order": current_order,
+                                            "location_code": "MID_LEFT",
+                                            "location_name": "Corner_Left_Mid",
+                                            "x": 0.0,
+                                            "y": 0.0,
+                                            "yaw": 0.0,
+                                            "is_mid_point": True
+                                        }
+                                        processed_route.append(left_mid)
+                                        self.get_logger().info(f"🔄 [Route Planner] {current_name} ↔ {next_name} (일반구간) -> Left 경유지 무조건 주입")
 
                             self.blackboard.web_action = command_data.get("type")
                             self.blackboard.web_route_list = processed_route
@@ -81,6 +118,7 @@ class WebBridgeNode(Node):
                             
                             self._mark_command_as_handled(command_id)
                             self.last_handled_command_id = command_id
+                            
                             
             except requests.exceptions.RequestException as e:
                 self.get_logger().error(f"Flask 서버 폴링 중 통신 실패: {e}")
@@ -156,6 +194,30 @@ class WebBridgeNode(Node):
         except Exception as e:
             self.get_logger().error(f"로봇 상태 업데이트 보고 중 오류 발생: {e}")
 
+
+    def _full_path_callback(self, msg):
+        """전처리 노드가 만든 전체 경로 JSON을 받아서 Flask로 쏴주는 함수"""
+        try:
+            # 1. 받은 토픽 데이터를 딕셔너리로 변환
+            path_data = json.loads(msg.data)
+            
+            # 2. Flask API 주소 (환경에 맞게 IP와 포트 수정 필요!)
+            # 만약 DB가 있는 교육원 PC 주소가 192.168.1.100 이라면 거기로 맞춰야 합니다.
+            flask_api_url = f"{self.flask_base_url}/api/navigation/path"
+            
+            # 3. HTTP POST 요청으로 프론트엔드에 쏴주기
+            headers = {'Content-Type': 'application/json'}
+            response = requests.post(flask_api_url, json=path_data, headers=headers, timeout=2.0)
+            
+            if response.status_code == 200:
+                self.get_logger().info("✅ [Web Bridge] 프론트엔드로 전체 경로(Path) 전송 성공!")
+            else:
+                self.get_logger().error(f"❌ [Web Bridge] 프론트 전송 실패 (상태 코드: {response.status_code})")
+                
+        except requests.exceptions.RequestException as e:
+            self.get_logger().error(f"🌐 [Web Bridge] Flask 서버와 통신할 수 없습니다: {e}")
+        except Exception as e:
+            self.get_logger().error(f"⚠️ [Web Bridge] 경로 데이터 처리 중 에러: {e}")
 
 def main(args=None):
     rclpy.init(args=args)
