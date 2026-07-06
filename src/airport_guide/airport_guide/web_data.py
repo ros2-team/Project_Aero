@@ -229,7 +229,7 @@ class WebBridgeNode(Node):
         try:
             # 1. 받은 토픽 데이터를 딕셔너리로 변환
             path_data = json.loads(msg.data)
-            
+            self.get_logger().info(f"path_data 값은 {path_data} 입니다. !!!!!!!!!!!!!!!!!!!!")
             # 2. Flask API 주소 (환경에 맞게 IP와 포트 수정 필요!)
             # 만약 DB가 있는 교육원 PC 주소가 192.168.1.100 이라면 거기로 맞춰야 합니다.
             flask_api_url = f"{self.flask_base_url}/api/navigation/path"

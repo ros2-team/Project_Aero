@@ -46,7 +46,7 @@ class IndependentPathPreprocessor(Node):
         """웹에서 새 주행 명령이 떨어지면 낚아채서 전처리 시작"""
         try:
             command_data = json.loads(msg.data)
-            
+            self.get_logger().info("일단 받았습니다 !!!!!!!!!!!!!!!!!!!!!!!!")
             # 주행 명령("navigation_route")일 때만 작동
             if command_data.get("action") == "navigation_route":
                 route_list = command_data.get("payload", {}).get("route", [])
@@ -60,7 +60,8 @@ class IndependentPathPreprocessor(Node):
             
     ######################### 웹에서 요구하는 메세지 타입으로 포장 작업 ##############################
     def process_and_publish_path(self, route_list):
-        total_path = []
+        
+        ##### segment를 담는다 #######
         segments = []
         
         # 첫 출발점 세팅
@@ -84,9 +85,10 @@ class IndependentPathPreprocessor(Node):
                 px = round(pose.pose.position.x, 3)
                 py = round(pose.pose.position.y, 3)
                 coord = {"x": px, "y": py}
-                
+
+
+                ########## x,y값을 담는다. #########
                 segment_path.append(coord)
-                total_path.append(coord) # 전체 경로 배열에도 쭉 이어붙임
 
             # 3. segments 배열에 현재 구간 정보 쏙 집어넣기
             segments.append({
@@ -103,7 +105,6 @@ class IndependentPathPreprocessor(Node):
 
         # 5. 프론트엔드 명세서와 100% 일치하는 최종 딕셔너리 조립
         navigation_path_state = {
-            "path": total_path,
             "segments": segments
         }
 
