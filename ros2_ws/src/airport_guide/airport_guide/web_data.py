@@ -104,6 +104,68 @@ class WebBridgeNode(Node):
         except Exception as e:
             self.get_logger().error(f"처리 완료 보고 중 예외 발생: {e}")
 
+    def _convert_bt_goal_state_to_web_status(self, bt_data: dict) -> str:
+        
+        # 행동트리 내부 상태를 웹 UI에서 사용하는 navigation status로 변환한다.
+
+        # BT 내부 상태:
+        # idle, sent, running, canceling, done
+
+        # Web 상태:
+        # idle, moving, paused, stopped, finished
+
+        if bt_data.get("navigation_finished", False):
+            return "finished"
+        
+        if bt_data.get("is_paused", False):
+            return "paused"
+
+        # 권장: 행동트리에서 goal_state로 보내는 경우
+        goal_state = bt_data.get("goal_state")
+
+        # 현재 코드 호환용: 행동트리에서 status로 보내는 경우도 처리
+        if goal_state is None:
+            goal_state = bt_data.get("status", "idle")
+
+        goal_state = str(goal_state).lower()
+
+        current_index = int(bt_data.get("current_index", 0))
+
+        route_length = bt_data.get("route_length")
+
+        if route_length is None:
+            route = bt_data.get("route", [])
+            if isinstance(route, list):
+                route_length = len(route)
+            else:
+                route_length = 0
+
+        route_length = int(route_length)
+
+        if goal_state == "idle":
+            return "idle"
+
+        if goal_state == "sent":
+            return "moving"
+
+        if goal_state == "running":
+            return "moving"
+
+        if goal_state == "canceling":
+            return "stopped"
+
+        if goal_state == "done":
+            if route_length > 0 and current_index >= route_length:
+                return "finished"
+
+            return "moving"
+
+        # 혹시 이미 웹 상태로 들어오는 경우도 허용
+        if goal_state in ["moving", "paused", "stopped", "finished"]:
+            return goal_state
+
+        return "idle"
+
     def _bt_status_callback(self, msg: String):
         """행동트리 상태 토픽을 구조별로 분류하여 Flask로 전달"""
         try:
@@ -123,31 +185,55 @@ class WebBridgeNode(Node):
                 return
 
             # 🛠️ [구조 분류 2] navigation_state 처리 (이벤트성 변경 데이터)
-            elif "status" in bt_data:
+            elif "status" in bt_data or "goal_state" in bt_data:
+                web_status = self._convert_bt_goal_state_to_web_status(bt_data)
+                
+                current_index = int(bt_data.get("current_index",0))
+                
+                navigation_payload = {
+                    "status": web_status,
+                    "current_index": current_index
+                }
+
+                navigation_payload["bt_status_raw"] = bt_data.get("status")
+                navigation_payload["bt_goal_state_raw"] = bt_data.get("goal_state")
+                navigation_payload["is_paused"] = bt_data.get("is_paused", False)
+
                 current_nav_key = (
-                    bt_data.get("status"),
-                    bt_data.get("current_index")
+                    navigation_payload["status"],
+                    navigation_payload["current_index"],
+                    navigation_payload["is_paused"]
                 )
 
-                # 상태가 이전과 정확히 같으면 Flask 전송 패스
                 if current_nav_key == self.last_nav_status:
                     return
-                
-                url = f"{self.flask_base_url}/api/navigation/update"
 
+                self.get_logger().info(
+                    "\n" + "=" * 50 +
+                    f"\n🔄 [내비게이션 상태 변환]" +
+                    f"\nBT 원본: {json.dumps(bt_data, indent=2, ensure_ascii=False)}" +
+                    f"\nWEB 변환: {json.dumps(navigation_payload, indent=2, ensure_ascii=False)}" +
+                    "\n" + "=" * 50
+                )
+
+                url = f"{self.flask_base_url}/api/navigation/update"
                 res = requests.post(
-                    url, 
-                    data=json.dumps(bt_data),
-                    headers=headers, 
+                    url,
+                    data=json.dumps(navigation_payload),
+                    headers=headers,
                     timeout=1.0
                 )
-                
+
                 if res.status_code == 200:
-                    self.get_logger().info(f"Flask에 내비게이션 상태 변경 보고 성공: {bt_data}")
+                    self.get_logger().info(
+                        f"Flask에 내비게이션 상태 변경 보고 성공: {navigation_payload}"
+                    )
                     self.last_nav_status = current_nav_key
                 else:
-                    self.get_logger().error(f"내비게이션 상태 보고 실패 (HTTP: {res.status_code})")
-        
+                    self.get_logger().error(
+                        f"내비게이션 상태 보고 실패 (HTTP: {res.status_code})"
+                    )
+                            
         except Exception as e:
             self.get_logger().error(f"로봇 상태 업데이트 보고 중 오류 발생: {e}")
 

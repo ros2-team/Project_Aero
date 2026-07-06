@@ -242,11 +242,13 @@ class AirportGuideBT(Node):
 
             if is_nav_changed:
                 navigation_payload = {
-                    "status": current_nav_status,
+                    "goal_state" : self.blackboard.goal_state.name.lower() if self.blackboard.goal_state else "idle",
                     "type": getattr(self.blackboard, "web_action", None),
-                    "route": current_route,
+                    "route_length": len(current_route),
                     "current_index": current_index,
-                    "is_paused": current_is_paused
+                    "is_paused": current_is_paused,
+                    "navigation_active": getattr(self.blackboard, "navigation_active", False),
+                    "navigation_finished": getattr(self.blackboard, "navigation_finished", False)
                 }
                 
                 msg_nav = String()
