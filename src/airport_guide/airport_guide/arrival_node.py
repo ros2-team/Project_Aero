@@ -119,11 +119,13 @@ class ArrivalNode(Node):
 
                 # 릴레이 경유지 교체 시점에도 즉시 RUNNING 상태로 인계하여 계측 루프 차단 방지
                 self.blackboard.goal_state = GoalState.IDLE
-                self.get_logger().info(f"다음 경유지 이동 시작: {self.blackboard.goal_name} (FSM: RUNNING)")
+                self.local_wait_started = False # 대기 플래그 반드시 리셋
+                self.get_logger().info(f"🔄 경유지 교체 완료 ➔ 다음 타깃: {self.blackboard.goal_name} (FSM: IDLE 전환 / 새 출발 대기)")
             else:
                 self.blackboard.goal_name = ""
                 self.blackboard.goal_state = GoalState.IDLE
                 self.is_current_mid_point = False
+                self.local_wait_started = False
                 self.get_logger().info("🎉 모든 지정 경유지 주행이 최종 완료되었습니다.")
             return
 
@@ -132,8 +134,12 @@ class ArrivalNode(Node):
         # ---------------------------------------------------------------------
         # 🛠️ 로봇이 실제 주행 중(RUNNING)이 아니라면 아래의 거리 계산/타이머 로직을 아예 '무시'하고 종료합니다.
         # IDLE 상태일 때 하단 거리 계산으로 흘러내려가던 치명적인 구멍을 차단합니다.
+        # if self.blackboard.goal_state != GoalState.RUNNING:
+        #     self.local_wait_started = False
+        #     return
+        
+        # ***********************7/6일 수정***********************
         if self.blackboard.goal_state != GoalState.RUNNING:
-            self.local_wait_started = False
             return
 
         # 🏃‍♂️ 여기 아래부터는 오직 goal_state가 "RUNNING"일 때만 도달하여 실행됩니다.
