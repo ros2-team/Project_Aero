@@ -114,26 +114,46 @@ class IndependentPathPreprocessor(Node):
         self.get_logger().info(f"🚀 웹 렌더링용 경로 토픽 발행 완료! (구간 {len(segments)}개)")
 
     def _request_nav2_path(self, start_x, start_y, goal_x, goal_y):
+
         goal_msg = ComputePathToPose.Goal()
-        goal_msg.start.header.frame_id = 'map'
+
+        goal_msg.start.header.frame_id = "map"
         goal_msg.start.pose.position.x = start_x
         goal_msg.start.pose.position.y = start_y
         goal_msg.start.pose.orientation.w = 1.0
         goal_msg.use_start = True
 
-        goal_msg.goal.header.frame_id = 'map'
+        goal_msg.goal.header.frame_id = "map"
         goal_msg.goal.pose.position.x = goal_x
         goal_msg.goal.pose.position.y = goal_y
         goal_msg.goal.pose.orientation.w = 1.0
-        goal_msg.planner_id = 'GridBased'
+        goal_msg.planner_id = "GridBased"
 
-        future = self.cli.call_async(goal_msg)
-        # ReentrantCallbackGroup 덕분에 여기서 spin_until_future_complete를 써도 데드락 안 걸림
-        rclpy.spin_until_future_complete(self, future)
-        
-        if future.result() is not None:
-            return future.result().path.poses
-        return []
+        # Goal 전송
+        send_goal_future = self.cli.send_goal_async(goal_msg)
+        rclpy.spin_until_future_complete(self, send_goal_future)
+
+        goal_handle = send_goal_future.result()
+
+        if goal_handle is None:
+            self.get_logger().error("Goal Handle 생성 실패")
+            return []
+
+        if not goal_handle.accepted:
+            self.get_logger().error("Goal이 거부되었습니다.")
+            return []
+
+        # 결과 요청
+        result_future = goal_handle.get_result_async()
+        rclpy.spin_until_future_complete(self, result_future)
+
+        result = result_future.result()
+
+        if result is None:
+            self.get_logger().error("결과를 받지 못했습니다.")
+            return []
+
+        return result.result.path.poses
 
 def main(args=None):
     rclpy.init(args=args)

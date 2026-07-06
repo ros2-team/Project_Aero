@@ -167,25 +167,32 @@ class WebBridgeNode(Node):
                 return
 
             # 🛠️ [구조 분류 2] navigation_state 처리 (이벤트성 변경 데이터)
+             # 🛠️ [구조 분류 2] navigation_state 처리 (이벤트성 변경 데이터)
             elif "status" in bt_data:
-                current_nav_status = bt_data.get("status")
+                current_nav_key = (
+                    bt_data.get("status"),
+                    bt_data.get("current_index")
+                )
 
                 # 상태가 이전과 정확히 같으면 Flask 전송 패스
-                if current_nav_status == self.last_nav_status:
+                if current_nav_key == self.last_nav_status:
                     return
-                self.get_logger().info(
-                    "\n" + "="*50 +
-                    f"\n🔄 [내비게이션 상태 변경 감지] {self.last_nav_status} -> {current_nav_status}" +
-                    f"\n{json.dumps(bt_data, indent=2, ensure_ascii=False)}" +
-                    "\n" + "="*50
-                )
+                
                 url = f"{self.flask_base_url}/api/navigation/update"
-                res = requests.post(url, data=json.dumps(bt_data), headers=headers, timeout=1.0)
+
+                res = requests.post(
+                    url, 
+                    data=json.dumps(bt_data),
+                    headers=headers, 
+                    timeout=1.0
+                )
+                
                 if res.status_code == 200:
                     self.get_logger().info(f"Flask에 내비게이션 상태 변경 보고 성공: {bt_data}")
-                    self.last_nav_status = current_nav_status
+                    self.last_nav_status = current_nav_key
                 else:
                     self.get_logger().error(f"내비게이션 상태 보고 실패 (HTTP: {res.status_code})")
+        
         except Exception as e:
             self.get_logger().error(f"로봇 상태 업데이트 보고 중 오류 발생: {e}")
 
