@@ -41,7 +41,7 @@ class ArrivalNode(Node):
             action_type = raw_data.get("action")  # web_bridge가 보낸 규격 매칭
             payload = raw_data.get("payload", {})   # raw_data.get("payload")로 이 덩어리를 가져옴
             route = payload.get("route", []) # 실제 루트 꺼내옴
-            
+            self.get_logger().info(f"이것이 제가 전송 받은 route들 입니다 !!!!!!!!!!!!!!!!!!!!!!!!! {route}")
             if action_type == "navigation_route":   # 안내시작 누르면 실행 됨
             
                 self.blackboard.web_route_list = route
