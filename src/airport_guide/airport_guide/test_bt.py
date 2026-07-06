@@ -38,8 +38,11 @@ class AirportGuideBT(Node):
     def __init__(self, blackboard):
         super().__init__("airport_guide_bt")
         self.blackboard = blackboard
+        
+        # 🔄 [원복 완료] bt_nodes에서 복잡한 통신 자원을 제거하고 메인 노드가 온전히 독점하도록 롤백했습니다.
         self.nav_client = ActionClient(self, NavigateToPose, '/navigate_to_pose')
 
+        # 🔄 [원복 완료] bt_nodes 내에 결합되어 있던 비동기 액션 서버용 상태 추적 핸들러를 메인 클래스 멤버로 복원했습니다.
         self._current_goal_handle = None
         
         # ---------------------------------------------------------------------
@@ -106,7 +109,7 @@ class AirportGuideBT(Node):
         self.root.add_child(nav_br)          # 8순위: 모든 예외가 없을 때 자율주행 실행
         self.root.add_child(ActionIdle("SystemIdle")) # 9순위: 정말 아무것도 안 할 때의 대기
 
-        # 🛠️ [추가] 웹 상태 변경 감지 및 주기 제어를 위한 변수 초기화
+        # 웹 상태 변경 감지 및 주기 제어를 위한 변수 초기화
         self.last_robot_status_pub_time = 0.0
         self.last_nav_status = None
         self.last_nav_current_index = None
@@ -123,7 +126,13 @@ class AirportGuideBT(Node):
             if self.blackboard.goal_state == GoalState.CANCELING:
                 self.set_goal_state(GoalState.IDLE)
 
+
+    # =====================================================================
+    # 🔄 [원복 완료 지점] bt_nodes 레이어로부터 회수하여 메인 트리로 원상복구시킨 제어 로직들
+    # =====================================================================
+
     def send_nav_goal(self, x, y):
+        """ 🔄 [원복] Goal 메시지 생성 및 Nav2 액션 비동기 송신 인터페이스를 다시 메인 노드로 이관했습니다. """
         self.get_logger().info(f"🎯 Nav2 액션 목표 전송 시작: ({x}, {y})")
         goal_msg = NavigateToPose.Goal()
         goal_msg.pose.header.frame_id = "map"
@@ -136,16 +145,21 @@ class AirportGuideBT(Node):
 
         self.nav_client.wait_for_server()
         send_goal_future = self.nav_client.send_goal_async(goal_msg)
+        
+        # 🔄 [원복] 비동기 응답 타깃 메서드를 다시 메인 노드의 콜백 함수로 연동했습니다.
         send_goal_future.add_done_callback(self._goal_response_callback)
 
+        # 액션 요청을 쏘자마자 즉시 SENT 상태로 명시 변경하여 0.1초 뒤 트리의 연속 호출 현상을 차단합니다.
         self.set_goal_state(GoalState.SENT)
 
     def set_goal_state(self, new_state: GoalState):
+        """ 🔄 [원복] 블랙보드 내부 FSM 전이 권한 및 상태 변경 공통 메서드를 메인 트리 본체로 복원했습니다. """
         old_state = self.blackboard.goal_state
         self.blackboard.goal_state = new_state
         self.get_logger().info(f"🔁 [FSM] goal_state: {old_state.name} -> {new_state.name}")
 
     def _goal_response_callback(self, future):
+        """ 🔄 [원복] Nav2 서버의 수락 응답 패킷을 처리하고 정식 RUNNING으로 진입시키는 핵심 콜백입니다. """
         goal_handle = future.result()
         if not goal_handle.accepted:
             self.get_logger().error("❌ Nav2가 goal을 거절했습니다.")
@@ -153,17 +167,21 @@ class AirportGuideBT(Node):
             return
 
         self._current_goal_handle = goal_handle
+        
+        # 하부 하드웨어가 명령을 공식 수락한 그 물리 시점에 철저하게 RUNNING 상태로 동기화합니다.
         self.set_goal_state(GoalState.RUNNING)
 
         result_future = goal_handle.get_result_async()
         result_future.add_done_callback(self._goal_result_callback)
 
     def _goal_result_callback(self, future):
+        """ 🔄 [원복] 내비게이션 세션의 완료 상태를 감지하여 주행이 완결(DONE)되었음을 마킹하는 최종 콜백입니다. """
         if self.blackboard.goal_state not in [GoalState.CANCELING, GoalState.IDLE]:
             self.set_goal_state(GoalState.DONE)
         self._current_goal_handle = None
 
     def cancel_nav_goal(self):
+        """ 🔄 [원복] 주행 강제 취소 액션 인터페이스를 다시 메인 본체로 롤백했습니다. """
         if self.blackboard.goal_state in [GoalState.RUNNING, GoalState.SENT]:
             if self._current_goal_handle is not None:
                 self.set_goal_state(GoalState.CANCELING)
@@ -171,9 +189,9 @@ class AirportGuideBT(Node):
             else:
                 self.set_goal_state(GoalState.IDLE)
 
+
     # *********** 디버깅 및 웹 상태 보고 코드 **********************
     def bt_tick(self):
-        # 1초마다 블랙보드 상태를 터미널에 강제로 찍어주는 디버그 로그
         self.get_logger().info(
             f"🔄 [BT TICK] 현재 goal_name: '{self.blackboard.goal_name}', "
             f"state: {self.blackboard.goal_state.name if self.blackboard.goal_state else 'None'}", 
@@ -183,7 +201,7 @@ class AirportGuideBT(Node):
         current_time = time.time()
 
         # ---------------------------------------------------------------------
-        # 🛠️ [1] robot_status_state 발행 (변경과 무관하게 1초 주기로 지속 발행)
+        # [1] robot_status_state 발행 (1초 주기 발행)
         # ---------------------------------------------------------------------
         if current_time - self.last_robot_status_pub_time >= 1.0:
             try:
@@ -207,7 +225,7 @@ class AirportGuideBT(Node):
 
 
         # ---------------------------------------------------------------------
-        # 🛠️ [2] navigation_state 발행 (도착, 진행중, 대기 등 상태 변경 시에만 발행)
+        # [2] navigation_state 발행 (상태 변경 시 발행)
         # ---------------------------------------------------------------------
         try:
             current_nav_status = self.blackboard.goal_state.name.lower() if self.blackboard.goal_state else "idle"
@@ -215,7 +233,6 @@ class AirportGuideBT(Node):
             current_is_paused = getattr(self.blackboard, "is_paused", False)
             current_index = getattr(self.blackboard, "current_waypoint_index", 0) 
 
-            # 상태값 실시간 변경 여부 가드 조건식
             is_nav_changed = (
                 current_nav_status != self.last_nav_status or
                 current_index != self.last_nav_current_index or
@@ -238,7 +255,6 @@ class AirportGuideBT(Node):
                 
                 self.get_logger().info(f"📢 [웹 피드백] navigation_state 변경 발송 -> status: {current_nav_status}")
                 
-                # 다음 주기를 위한 상태 백업 동기화
                 self.last_nav_status = current_nav_status
                 self.last_nav_current_index = current_index
                 self.last_nav_is_paused = current_is_paused
@@ -248,7 +264,7 @@ class AirportGuideBT(Node):
             self.get_logger().error(f"navigation_state 발행 실패: {e}", throttle_duration_sec=3.0)
 
         # ---------------------------------------------------------------------
-        # 실제 행동트리 실행
+        # 실제 행동트리 실행 (얇아진 ActionMoveToGoal 노드가 메인의 원복된 함수들을 안전하게 교차 타깃 호출)
         # ---------------------------------------------------------------------
         self.root.tick(self.blackboard, self)
 
@@ -256,10 +272,8 @@ class AirportGuideBT(Node):
 def main(args=None):
     rclpy.init(args=args)
     
-    # 🎯 [Single Source of Truth] 단 하나의 공유 메모리 공간 생성
     shared_blackboard = Blackboard()
 
-    # 1. 존재하는 실물 노드들만 생성하여 동일한 shared_blackboard 주입
     web_bridge_node = WebBridgeNode(shared_blackboard)
     bt_node = AirportGuideBT(shared_blackboard)
     battery_node = BatteryNode(shared_blackboard)
@@ -267,8 +281,6 @@ def main(args=None):
     front_cam_node = FrontCameraNode(shared_blackboard)
     web_pause = WebPauseNode(shared_blackboard)
 
-
-    # 2. 멀티스레드 익스큐터에 실물 노드 6개 등록
     executor = MultiThreadedExecutor()
     executor.add_node(web_bridge_node)
     executor.add_node(bt_node)
@@ -278,12 +290,10 @@ def main(args=None):
     executor.add_node(web_pause) 
 
     try:
-        # 단일 프로세스로 병렬 가동 시작
         executor.spin()
     except KeyboardInterrupt:
         pass
     finally:
-        # 자원 해제
         web_bridge_node.destroy_node()
         bt_node.destroy_node()
         battery_node.destroy_node()
