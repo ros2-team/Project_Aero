@@ -1,3 +1,0 @@
-[console_scripts]
-navigation_server = guide_robot.navigation_server:main
-
