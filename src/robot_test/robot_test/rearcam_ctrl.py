@@ -75,14 +75,14 @@ class ControlNode(Node):
             min_idx = np.argmin(target_distances)
             min_angle_deg = target_angles[min_idx]
             
-            print(f"[장애물 감지] 픽셀({self.xmin}~{self.xmax}) -> 각도({angle_min_limit:.1f}°~{angle_max_limit:.1f}°) 영역")
-            print(f"   가장 가까운 장애물: {min_distance_cm:.1f}cm (위치: {min_angle_deg:.1f}°)")
+            # print(f"[장애물 감지] 픽셀({self.xmin}~{self.xmax}) -> 각도({angle_min_limit:.1f}°~{angle_max_limit:.1f}°) 영역")
+            # print(f"   가장 가까운 장애물: {min_distance_cm:.1f}cm (위치: {min_angle_deg:.1f}°)")
             
             return min_distance_cm
         else:
             ### Bounding Box 영역 안에 있긴 하지만, 거리가 200cm 밖이라 
             ### 전처리 과정에서 날아갔거나 아예 텅 빈 허공인 경우
-            print(f" [안전] 각도({angle_min_limit:.1f}°~{angle_max_limit:.1f}°) 영역 내 200cm 이하 장애물 없음")
+            # print(f" [안전] 각도({angle_min_limit:.1f}°~{angle_max_limit:.1f}°) 영역 내 200cm 이하 장애물 없음")
             
             return None ### 혹은 안전을 뜻하는 기본값 반환 (예: 200.0)
         
