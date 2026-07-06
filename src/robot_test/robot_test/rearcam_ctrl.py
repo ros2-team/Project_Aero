@@ -39,7 +39,7 @@ class ControlNode(Node):
         cx = data.data[1]
         self.xmax = data.data[2]
         
-        print(f"x min값: {self.xmin:.1f}, x max값: {self.xmax:.1f}")
+        # print(f"x min값: {self.xmin:.1f}, x max값: {self.xmax:.1f}")
 
     ### 라이다 각도와 거리 데이터 저장
     def lidar_callback(self, data):
@@ -94,7 +94,7 @@ class ControlNode(Node):
         
         ### 융합된 결과물(min_dist)을 이용해 로봇 제어 명령 퍼블리시
         if min_dist is not None:
-            if min_dist > 120.0:
+            if min_dist > 150.0:
                 ### 사용자가 120cm이상 너무 멀어지면
                 self.get_logger().warn(f" 사용자 멀어짐 {min_dist:.1f}cm" )
 
