@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>안내 완료</title>
+    <link rel="icon" href="data:,">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/finish.css') }}">
+</head>
+
+<body>
+    <div class="finish-page">
+
+        <div class="background-layer"></div>
+        <div class="white-gradient-layer"></div>
+
+        <header class="finish-header">
+
+            <div class="header-empty"></div>
+
+            <img
+                class="logo-image"
+                src="{{ url_for('static', filename='img/ui/logo.png') }}"
+                alt="AIRPORT GUIDE ROBOT"
+            >
+
+            <div class="header-empty"></div>
+
+        </header>
+
+        <main class="finish-content">
+
+            <section class="finish-main">
+
+                <div class="robot-complete-area">
+                    <div class="check-circle">
+                        <svg
+                            class="check-icon"
+                            viewBox="0 0 80 80"
+                            xmlns="http://www.w3.org/2000/svg"
+                        >
+                            <path
+                                d="M22 42 L35 55 L60 27"
+                                fill="none"
+                                stroke="white"
+                                stroke-width="9"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+                        </svg>
+                    </div>
+                    <img
+                        class="finish-robot-image"
+                        src="{{ url_for('static', filename='img/ui/finish.png') }}"
+                        alt="안내 완료 로봇"
+                    >
+                </div>
+
+                <h1>
+                    목적지에 도착했어요!
+                </h1>
+
+                <p>
+                    필요한 안내가 더 있으신가요?
+                </p>
+
+                <div class="finish-actions">
+
+                    <button
+                        class="finish-button primary-button"
+                        id="moreGuideBtn"
+                    >
+                        <span class="button-icon">📍</span>
+                        추가 안내가 필요해요
+                    </button>
+
+                    <button
+                        class="finish-button secondary-button"
+                        id="finishServiceBtn"
+                    >
+                        <span class="button-icon">⌂</span>
+                        아니요, 괜찮아요
+                    </button>
+
+                </div>
+
+            </section>
+
+        </main>
+
+    </div>
+    <script src="{{ url_for('static', filename='js/finish.js') }}"></script>
+</body>
+</html>

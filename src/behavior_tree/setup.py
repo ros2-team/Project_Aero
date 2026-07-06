@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 import os
 from glob import glob
 
-package_name = 'robot_bringup'
+package_name = 'behavior_tree'
 
 setup(
     name=package_name,
@@ -17,7 +17,7 @@ setup(
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='kim',
-    maintainer_email='kim@todo.todo',
+    maintainer_email='ehrud2235@naver.com',
     description='TODO: Package description',
     license='TODO: License declaration',
     extras_require={
@@ -27,6 +27,12 @@ setup(
     },
     entry_points={
         'console_scripts': [
+        'arrival_node = behavior_tree.arrival_node:main',
+        'battery_node = behavior_tree.battery_node:main',
+        'front_cam_node = behavior_tree.front_cam_node:main',
+        'path_node = behavior_tree.path_node:main',
+        'test_bt = behavior_tree.test_bt:main',
+        'web_pause = behavior_tree.web_pause:main',
         ],
     },
 )

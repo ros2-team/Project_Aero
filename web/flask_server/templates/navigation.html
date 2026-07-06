@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>길 안내 중</title>
+    <link rel="icon" href="data:,">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/navigation.css') }}">
+</head>
+
+<body>
+    <div class="app-page">
+        <div class="screen">
+
+            <header class="top-bar">
+
+                <div class="top-action"></div> 
+
+                <img
+                    class="page-logo"
+                    src="{{ url_for('static', filename='img/ui/logo.png') }}"
+                    alt="AIRPORT GUIDE ROBOT"
+                >
+
+                <button class="pause-btn" id="pauseButton">
+                    ⏸ 일시정지
+                </button>
+            </header>
+
+            <main class="navigation-layout">
+
+                <aside class="route-panel">
+
+                    <h2 class="side-title">안내 경로</h2>
+
+                    <div class="route-list" id="routeList">
+                        <div class="route-item active">
+                            <div class="route-index">1</div>
+                            <div class="route-info">
+                                <div class="route-name">{{ destination }}</div>
+                                <div class="route-status">이동 중</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="summary-card robot-status-card">
+
+                        <div class="summary-row">
+                            <span>배터리</span>
+                            <strong id="navBatteryValue">--%</strong>
+                        </div>
+
+                        <div class="summary-row">
+                            <span>로봇 상태</span>
+                            <strong id="navRobotStatus">대기 중</strong>
+                        </div>
+
+                        <div class="summary-row">
+                            <span>현재 좌표</span>
+                            <strong id="navRobotPosition">--, --</strong>
+                        </div>
+
+                    </div>
+
+                </aside>
+
+                <section class="map-panel">
+
+                    <div class="navigation-title-area">
+                        <h1>
+                            <span id="currentTarget">{{ destination }}</span>
+                            안내 중입니다.
+                        </h1>
+                        <p>안전을 위해 로봇을 따라와 주세요.</p>
+                    </div>
+
+                    <div class="map-card">
+
+                        <div class="slam-map-wrapper">
+                            <img
+                                class="map-image"
+                                id="mapImage"
+                                src="{{ url_for('static', filename='img/map/designed_map.png') }}"
+                                alt="실내 지도"
+                            >
+
+                            <canvas id="mapCanvas"></canvas>
+                        </div>
+
+                        <button class="zoom-btn zoom-plus">＋</button>
+                        <button class="zoom-btn zoom-minus">－</button>
+
+                    </div>
+
+                    <div class="legend">
+                        <div class="legend-item">
+                            <span class="legend-marker current"></span>
+                            <span>현재 위치</span>
+                        </div>
+
+                        <div class="legend-item">
+                            <span class="legend-marker target"></span>
+                            <span>목적지</span>
+                        </div>
+
+                        <div class="socket-state">
+                            <span class="socket-dot" id="socketDot"></span>
+                            <span id="socketStatus">연결 대기</span>
+                        </div>
+                    </div>
+
+                </section>
+
+            </main>
+            
+            <div class="pause-modal" id="pauseModal">
+                <div class="pause-modal-card">
+                    <div class="pause-icon">⏸</div>
+                    <h2>길 안내를 일시정지했습니다</h2>
+                    <p>
+                        안내를 계속 진행하거나,<br>
+                        경로를 변경할 수 있습니다.
+                    </p>
+
+                    <div class="pause-actions">
+                        <button class="modal-btn route-change" id="changeRouteButton">
+                            경로 변경
+                        </button>
+
+                        <button class="modal-btn continue" id="continueButton">
+                            계속
+                        </button>
+
+                        <button class="modal-btn stop" id="stopServiceButton">
+                            이용 중지
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+    
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    
+    <script>
+        const LOCATION_CODE = "{{ location_code }}";
+        const DESTINATION_NAME = "{{ destination }}";
+    </script>
+
+    <script src="{{ url_for('static', filename='js/navigation.js') }}"></script>
+
+</body>
+</html>

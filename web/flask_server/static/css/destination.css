@@ -1,0 +1,255 @@
+.destination-page {
+    min-height: calc(100vh - 74px);
+    padding: 28px 34px 36px;
+    background:
+        radial-gradient(circle at 85% 10%, rgba(7, 93, 232, 0.08), transparent 32%),
+        linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+}
+
+.title-area {
+    text-align: center;
+    margin: 6px 0 24px;
+}
+
+.destination-layout {
+    max-width: 1220px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1.08fr 0.92fr;
+    gap: 24px;
+}
+
+.destination-card {
+    padding: 22px;
+    min-height: 560px;
+    display: flex;
+    flex-direction: column;
+}
+
+.card-header {
+    margin-bottom: 16px;
+}
+
+.card-header h2 {
+    margin: 0;
+    color: var(--navy);
+    font-size: 18px;
+    font-weight: 900;
+}
+
+.card-caption {
+    display: block;
+    margin-top: 6px;
+    color: var(--text-sub);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.search-box {
+    margin-bottom: 16px;
+}
+
+.search-box input {
+    width: 100%;
+    height: 48px;
+    padding: 0 16px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: #fbfdff;
+    color: var(--text-main);
+    font-size: 15px;
+    outline: none;
+}
+
+.search-box input:focus {
+    border-color: #9ec3ff;
+    box-shadow: 0 0 0 4px rgba(7, 93, 232, 0.08);
+}
+
+.place-list,
+.selected-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.place-list {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.place-list::-webkit-scrollbar,
+.selected-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.place-list::-webkit-scrollbar-thumb,
+.selected-list::-webkit-scrollbar-thumb {
+    background: #c8d5ea;
+    border-radius: 999px;
+}
+
+.place-item {
+    min-height: 50px;
+    padding: 10px 8px;
+    border-radius: 14px;
+    display: grid;
+    grid-template-columns: 34px 1fr 34px;
+    align-items: center;
+    gap: 10px;
+}
+
+.place-item:hover {
+    background: #f3f7ff;
+}
+
+.place-icon {
+    color: var(--primary);
+    font-size: 20px;
+    text-align: center;
+}
+
+.place-info {
+    min-width: 0;
+}
+
+.place-name {
+    color: var(--text-main);
+    font-size: 15px;
+    font-weight: 900;
+}
+
+.place-code {
+    margin-top: 3px;
+    color: #8a97ad;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.place-add-btn {
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: white;
+    color: var(--primary);
+    font-size: 20px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.place-add-btn:hover {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.selected-list {
+    flex: 1;
+    max-height: 420px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.selected-item {
+    min-height: 58px;
+    margin-bottom: 12px;
+    padding: 12px;
+    border-radius: 14px;
+    background: #f4f8ff;
+    border: 1px solid #d9e7ff;
+    display: grid;
+    grid-template-columns: 36px 1fr auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.selected-order {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: #dceaff;
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+}
+
+.selected-name {
+    color: var(--text-main);
+    font-size: 15px;
+    font-weight: 900;
+}
+
+.selected-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.small-btn {
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: white;
+    color: var(--navy);
+    font-size: 15px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.small-btn.delete {
+    color: #ef4444;
+}
+
+.small-btn:hover {
+    background: #eef4ff;
+}
+
+.empty-selected {
+    height: 170px;
+    border: 1px dashed #9ec3ff;
+    border-radius: 14px;
+    color: var(--primary);
+    background: #fbfdff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    text-align: center;
+}
+
+.limit-text {
+    margin: 12px 0 16px;
+    color: var(--text-sub);
+    font-size: 13px;
+    text-align: center;
+    font-weight: 700;
+}
+
+.start-btn {
+    width: 100%;
+    height: 58px;
+    font-size: 18px;
+}
+
+.start-btn span {
+    margin-left: 10px;
+}
+
+@media (max-width: 900px) {
+    .destination-page {
+        padding: 22px 18px;
+    }
+
+    .destination-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .destination-card {
+        min-height: auto;
+    }
+}
