@@ -58,7 +58,7 @@ class SimpleYoloDetector(Node):
                 
                 ### 새로운 데이터를 구했으니 갱신
                 self.last_bbox_msg.data = [xmin, center_x, xmax]
-                self.get_logger().info(f"현재 센터 값 x: {center_x:.1f}")
+                # self.get_logger().info(f"현재 센터 값 x: {center_x:.1f}")
 
             else:
                 self.last_bbox_msg.data = [-1.0, -1.0, -1.0]
