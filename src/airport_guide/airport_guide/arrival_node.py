@@ -8,18 +8,22 @@ import math
 import time
 from rclpy.qos import qos_profile_sensor_data
 from airport_guide.blackboard import GoalState
+from geometry_msgs.msg import PoseWithCovarianceStamped
 
 class ArrivalNode(Node):
     def __init__(self, blackboard):
         super().__init__('arrival_node')
         self.blackboard = blackboard
-        self.odom_sub = self.create_subscription(
-            Odometry,
-            '/odom',
-            self.odom_callback,
-            qos_profile_sensor_data
-        )
+        
+        # self.odom_sub = self.create_subscription(
+        #     Odometry,
+        #     '/odom',
+        #     self.odom_callback,
+        #     qos_profile_sensor_data
+        # )
 
+
+        self.amcl_sub = self.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self.pose_callback, 10)
         # WebBridgeNode가 발행하는 웹 명령 토픽 직접 구독 추가
         self.command_sub = self.create_subscription(
             String,
@@ -61,11 +65,17 @@ class ArrivalNode(Node):
         except Exception as e:
             self.get_logger().error(f"❌ [Arrival Node] 웹 명령 파싱 오류: {e}")
 
-    def odom_callback(self, msg):
+    def pose_callback(self, msg):
         self.blackboard.current_x = msg.pose.pose.position.x
         self.blackboard.current_y = msg.pose.pose.position.y
         self.blackboard.last_sensor_time = time.time()
         self.blackboard.sensor_timeout = False
+
+    # def odom_callback(self, msg):
+    #     self.blackboard.current_x = msg.pose.pose.position.x
+    #     self.blackboard.current_y = msg.pose.pose.position.y
+    #     self.blackboard.last_sensor_time = time.time()
+    #     self.blackboard.sensor_timeout = False
 
     def check_arrival(self):
         if self.blackboard.web_action == "stop_navigation":
