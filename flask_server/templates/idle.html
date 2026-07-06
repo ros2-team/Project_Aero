@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>공항 안내 로봇</title>
+    <link rel="icon" href="data:,">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/common.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/idle.css') }}">
+</head>
+
+<body>
+    <div class="idle-page">
+
+        <div class="idle-background"></div>
+        <div class="idle-overlay"></div>
+
+        <header class="idle-header">
+
+            <div class="header-empty"></div>
+
+            <img
+                class="header-logo"
+                src="{{ url_for('static', filename='img/ui/logo.png') }}"
+                alt="AIRPORT GUIDE ROBOT"
+            >
+
+           <div class="header-right-space"></div>
+
+        </header>
+
+        <main class="idle-main">
+
+            <section class="idle-text-area">
+
+                <h1>
+                    안녕하세요!<br>
+                    <span>공항 안내</span> 로봇입니다.
+                </h1>
+
+                <p>
+                    현재 순찰 중이에요.<br>
+                    안내가 필요하시면<br>
+                    아래 버튼을 눌러주세요.
+                </p>
+
+                <button
+                    class="start-button"
+                    onclick="location.href='/welcome'"
+                >
+                    안내 시작하기
+                    <span>→</span>
+                </button>
+
+            </section>
+
+            <section class="robot-area">
+                <img
+                    class="robot-image"
+                    src="{{ url_for('static', filename='img/ui/normal.png') }}"
+                    alt="공항 안내 로봇"
+                >
+            </section>
+
+        </main>
+
+        <section class="status-cards">
+
+            <div class="status-card">
+                <div class="status-icon">📍</div>
+                <div>
+                    <div class="status-label">현재 위치</div>
+                    <div class="status-value">중앙 로비</div>
+                </div>
+            </div>
+
+            <div class="status-card">
+                <div class="status-icon">🔋</div>
+                <div>
+                    <div class="status-label">배터리</div>
+                    <div class="status-value" id="batteryValue">--%</div>
+                </div>
+            </div>
+
+            <div class="status-card">
+                <div class="status-icon network">▥</div>
+
+                <div class="status-text">
+                    <div class="status-label">연결 상태</div>
+                    <div class="status-value">
+                        <span id="networkValue">연결 대기</span>
+                        <span class="green-dot" id="networkDot"></span>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+    </div>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/idle.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>안내 확인</title>
+    <link rel="icon" href="data:,">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/welcome.css') }}">
+</head>
+
+<body>
+    <div class="welcome-page">
+
+        <div class="background-layer"></div>
+        <div class="white-layer"></div>
+
+        <header class="welcome-header">
+            <div class="header-space"></div>
+
+            <img
+                class="logo-image"
+                src="{{ url_for('static', filename='img/ui/logo.png') }}"
+                alt="AIRPORT GUIDE ROBOT"
+            >
+
+            <div class="header-space"></div>
+        </header>
+
+        <main class="welcome-content">
+
+            <section class="welcome-layout">
+
+                <div class="welcome-left">
+
+                    <h1>길을 잘 모르시겠나요?</h1>
+
+                    <p>
+                        어디로 가야 할지 고민되신다면,<br>
+                        제가 친절하게 안내해드릴게요!
+                    </p>
+
+                    <div class="question-robot-area">
+
+                        <div class="question-mark">?</div>
+
+                        <div class="robot-circle"></div>
+
+                        <img
+                            class="question-robot-image"
+                            src="{{ url_for('static', filename='img/ui/curios.png') }}"
+                            alt="안내 로봇"
+                        >
+
+                    </div>
+
+                </div>
+
+                <div class="welcome-right">
+
+                    <button
+                        class="choice-card primary-card"
+                        onclick="location.href='/destination'"
+                    >
+                        <div class="choice-text">네, 안내가 필요해요</div>
+                    </button>
+
+                    <button
+                        class="choice-card secondary-card"
+                        onclick="location.href='/idle'"
+                    >
+                        <div class="choice-text">아니요, 괜찮아요</div>
+                    </button>
+
+                    <div class="notice-box">
+
+                        <div class="notice-icon">i</div>
+
+                        <span>
+                            원하시는 목적지로 안전하게 안내해 드릴게요.
+                        </span>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+        </main>
+
+    </div>
+</body>
+</html>
