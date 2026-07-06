@@ -45,6 +45,10 @@ class AirportGuideBT(Node):
         # 🔄 [원복 완료] bt_nodes 내에 결합되어 있던 비동기 액션 서버용 상태 추적 핸들러를 메인 클래스 멤버로 복원했습니다.
         self._current_goal_handle = None
         
+        # 🛠️ [시니어 조치 - 추가] 세션 간 독립성을 보장하기 위해 비동기 Future 핸들러 전용 인스턴스 변수를 명시적 초기화합니다.
+        self._send_goal_future = None
+        self._get_result_future = None
+        
         # ---------------------------------------------------------------------
         # 웹브릿지(web_data)로 실시간 상태를 쏴줄 ROS2 퍼블리셔 추가
         # ---------------------------------------------------------------------
@@ -132,12 +136,19 @@ class AirportGuideBT(Node):
     # =====================================================================
 
     def send_nav_goal(self, x, y):
-        """ 🔄 [원복] Goal 메시지 생성 및 Nav2 액션 비동기 송신 인터페이스를 다시 메인 노드로 이관했습니다. """
+        """ 🚀 [주행 제어] Nav2 액션 서버로 새로운 목적지를 비동기 전송합니다. """
         self.get_logger().info(f"🎯 Nav2 액션 목표 전송 시작: ({x}, {y})")
 
-        # 🛠️ [핵심 안전장치] 새 명령을 내리기 전, 기존 주행 핸들과 콜백 예약을 완전히 초기화합니다.
+        # 🛡️ [시니어 조치 - 방어벽 1] 새 명령을 내리기 전, 기존 주행 세션들의 비동기 Future 핸들 잔재를 완전히 파괴합니다.
+        if hasattr(self, '_send_goal_future') and self._send_goal_future is not None:
+            self._send_goal_future.cancel()  # rclpy 이벤트 큐에 물려있던 유령 응답 스케줄 취소
+            self._send_goal_future = None
+            
+        if hasattr(self, '_get_result_future') and self._get_result_future is not None:
+            self._get_result_future.cancel()  # rclpy 이벤트 큐에 물려있던 유령 결과 스케줄 취소
+            self._get_result_future = None
+
         if hasattr(self, '_current_goal_handle') and self._current_goal_handle is not None:
-            # 기존 세션이 남아있다면 잔여 콜백 간섭을 막기 위해 제거
             self._current_goal_handle = None 
 
         goal_msg = NavigateToPose.Goal()
@@ -147,13 +158,13 @@ class AirportGuideBT(Node):
         goal_msg.pose.pose.position.y = y
         goal_msg.pose.pose.orientation.w = 1.0
 
-        self._current_goal_handle = None
-
         self.nav_client.wait_for_server()
-        send_goal_future = self.nav_client.send_goal_async(goal_msg)
         
-        # 🔄 [원복] 비동기 응답 타깃 메서드를 다시 메인 노드의 콜백 함수로 연동했습니다.
-        send_goal_future.add_done_callback(self._goal_response_callback)
+        # 7/6 비동기 골 Future 객체를 인스턴스 전용 격리 공간인 self._send_goal_future에 완벽 보관
+        self._send_goal_future = self.nav_client.send_goal_async(goal_msg)
+        
+        # 비동기 응답 타깃 메서드를 메인 노드의 수락 콜백 함수로 연동합니다.
+        self._send_goal_future.add_done_callback(self._goal_response_callback)
 
         # 액션 요청을 쏘자마자 즉시 SENT 상태로 명시 변경하여 0.1초 뒤 트리의 연속 호출 현상을 차단합니다.
         self.set_goal_state(GoalState.SENT)
@@ -165,36 +176,69 @@ class AirportGuideBT(Node):
         self.get_logger().info(f"🔁 [FSM] goal_state: {old_state.name} -> {new_state.name}")
 
     def _goal_response_callback(self, future):
-        """ 🔄 [원복] Nav2 서버의 수락 응답 패킷을 처리하고 정식 RUNNING으로 진입시키는 핵심 콜백입니다. """
+        """ 🔄 [2단계: Nav2 서버의 목표 수락 여부 확인 콜백] """
+        # 7/6 상태 정합성 검증 가드벽 추가
+        if self.blackboard.goal_state != GoalState.SENT:
+            self.get_logger().warn("⚠️ [FSM 가드] SENT 상태가 아닐 때 유입된 목표 수락 응답이므로 폐기 처리합니다.")
+            return
+
         goal_handle = future.result()
         if not goal_handle.accepted:
             self.get_logger().error("❌ Nav2가 goal을 거절했습니다.")
             self.set_goal_state(GoalState.IDLE)
             return
 
+        self.get_logger().info("✅ Nav2 서버가 목표를 최종 수락했습니다. 로봇 주행 전이를 시작합니다.")
         self._current_goal_handle = goal_handle
         
         # 하부 하드웨어가 명령을 공식 수락한 그 물리 시점에 철저하게 RUNNING 상태로 동기화합니다.
         self.set_goal_state(GoalState.RUNNING)
 
-        result_future = goal_handle.get_result_async()
-        result_future.add_done_callback(self._goal_result_callback)
+        # 7/6 수락된 최신 골 핸들 본체(goal_handle)로부터 '순수한 결과 동기화 비동기 객체'를 정밀 호출하여 바인딩합니다.
+        # 이전 힙 메모리 체인에 남아 유령 신호를 터트리던 원천 원인을 완벽 소멸시킵니다.
+        self._get_result_future = goal_handle.get_result_async()
+        self._get_result_future.add_done_callback(self._goal_result_callback)
 
     def _goal_result_callback(self, future):
-        """ 🔄 [원복] 내비게이션 세션의 완료 상태를 감지하여 주행이 완결(DONE)되었음을 마킹하는 최종 콜백입니다. """
-        # 오직 정상 주행 중(RUNNING)일 때 들어온 완료 신호만 인정합니다.
+        """ 🔄 [3단계: 내비게이션 세션 완결 처리 콜백] """
+        # 🛡️ [시니어 조치 - 방어벽 3] 오직 정상 주행 중(RUNNING)일 때 들어온 완료 신호만 정식 전이로 인정합니다.
         # SENT, IDLE 상태 등 목적지 전환 직후에 들어오는 과거 유령 신호를 완벽히 차단합니다.
-        if self.blackboard.goal_state == GoalState.RUNNING:
-            self.set_goal_state(GoalState.DONE)
-        else:
+        if self.blackboard.goal_state != GoalState.RUNNING:
             self.get_logger().warn(
                 f"⚠️ [FSM 가드] RUNNING이 아닌 상태({self.blackboard.goal_state.name})에서 "
                 f"과거 세션 결과가 유입되어 무시 처리했습니다."
             )
-        self._current_goal_handle = None
+            return
+
+        # ---------------------------------------------------------------------
+        # 여기서부터 기존 코드를 덮어쓰며 무결성 검증 로직이 수행됩니다.
+        # ---------------------------------------------------------------------
+        try:
+            # [필수 검증] 수신된 실제 액션 상태 결과 추출
+            action_result = future.result()
+            action_status = action_result.status
+            
+            # 로그를 통해 실제 상태(숫자 값)를 가장 먼저 확인합니다.
+            self.get_logger().info(f"📊 [디버그 계측] Nav2 액션 서버가 복귀시킨 실제 Status 코드: {action_status}")
+
+            # 4는 rclpy/action_msgs 기준 SUCCEEDED(성공)을 의미합니다.
+            if action_status == 4: 
+                self.get_logger().info(f"🏁 [도착 성공] 목적지에 무사히 도착하여 세션을 완료합니다.")
+                self.set_goal_state(GoalState.DONE)
+            else:
+                # 취소(5)나 실패(6)인 경우 DONE으로 가면 안 되므로 IDLE로 안전 원복시킵니다.
+                self.get_logger().error(f"주행이 성공하지 못했습니다. (Status: {action_status})")
+                self.set_goal_state(GoalState.IDLE)
+
+        except Exception as e:
+            self.get_logger().error(f"결과 상태 파싱 중 치명적 예외 발생: {e}")
+            self.set_goal_state(GoalState.IDLE)
+        finally:
+            # 주행 완료 혹은 오판 무시 시점 이후, 인스턴스 전용 핸들링 포인터를 리셋하여 메모리를 클리어합니다.
+            self._get_result_future = None
+            self._current_goal_handle = None
 
     def cancel_nav_goal(self):
-        """ 🔄 [원복] 주행 강제 취소 액션 인터페이스를 다시 메인 본체로 롤백했습니다. """
         if self.blackboard.goal_state in [GoalState.RUNNING, GoalState.SENT]:
             if self._current_goal_handle is not None:
                 self.set_goal_state(GoalState.CANCELING)
