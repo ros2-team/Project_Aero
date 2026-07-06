@@ -76,18 +76,18 @@ class ScanLidar(Node):
         self.rear_pub(r_angles, r_dists)
 
     def rear_pub(self, r_angles, r_dists):
+        """ 후방 라이다 각도 및 거리 값 pub """
         msg = LidarScanData()
         msg.angles = r_angles.tolist()
         msg.distances = r_dists.tolist()   # numpy → list 변환은 여기서만
-        self.pub_front.publish(msg)
+        self.pub_rear.publish(msg)
 
-        
-    
     def front_pub(self, f_angles, f_dists):
+        """ 전방 라이다 각도 및 거리 값 pub """
         msg = LidarScanData()
         msg.angles = f_angles.tolist()
         msg.distances = f_dists.tolist()   # numpy → list 변환은 여기서만
-        self.pub_rear.publish(msg)
+        self.pub_front.publish(msg)
         
 def main(args=None):
     # 1. ROS2 통신 초기화

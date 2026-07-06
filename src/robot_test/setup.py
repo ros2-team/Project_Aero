@@ -36,11 +36,7 @@ setup(
             'rearcam = robot_test.rearcam:main',
             'waypoint_test = robot_test.waypoint_test:main',
             'front_rear_lidar = robot_test.front_rear_lidar:main',
-            'rearcam_ctrl = robot_test.rearcam_ctrl:main',
-            'test_bt = robot_test.test_bt:main',
-            'arrival_node = robot_test.arrival_node:main',
-            'front_came_node = robot_test.front_cam_node:main',
-            'battery_node = robot_test.battery_node:main'
+            'rearcam_ctrl = robot_test.rearcam_ctrl:main'
         ],
     },
 )

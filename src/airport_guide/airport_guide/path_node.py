@@ -6,7 +6,8 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
 from std_msgs.msg import String
 from geometry_msgs.msg import PoseWithCovarianceStamped
-from nav2_msgs.srv import ComputePathToPose
+from nav2_msgs.action import ComputePathToPose
+from rclpy.action import ActionClient
 
 class IndependentPathPreprocessor(Node):
     def __init__(self):
@@ -21,7 +22,14 @@ class IndependentPathPreprocessor(Node):
         self.create_subscription(PoseWithCovarianceStamped, '/amcl_pose', self.pose_callback, 10, callback_group=self.cb_group)
 
         # 2. Nav2 플래너 서비스 클라이언트 (비동기 호출용)
-        self.cli = self.create_client(ComputePathToPose, '/compute_path_to_pose', callback_group=self.cb_group)
+        self.cli = ActionClient(
+            self,
+            ComputePathToPose,
+            '/compute_path_to_pose',
+            callback_group=self.cb_group
+        )
+
+        self.cli.wait_for_server()
         
         # 3. 통신 라인: 웹 명령 듣기(Sub) & 웹으로 경로 쏘기(Pub)
         self.create_subscription(String, '/web/command', self.command_callback, 10, callback_group=self.cb_group)
@@ -106,20 +114,20 @@ class IndependentPathPreprocessor(Node):
         self.get_logger().info(f"🚀 웹 렌더링용 경로 토픽 발행 완료! (구간 {len(segments)}개)")
 
     def _request_nav2_path(self, start_x, start_y, goal_x, goal_y):
-        req = ComputePathToPose.Request()
-        req.start.header.frame_id = 'map'
-        req.start.pose.position.x = start_x
-        req.start.pose.position.y = start_y
-        req.start.pose.orientation.w = 1.0
-        req.use_start = True
+        goal_msg = ComputePathToPose.Goal()
+        goal_msg.start.header.frame_id = 'map'
+        goal_msg.start.pose.position.x = start_x
+        goal_msg.start.pose.position.y = start_y
+        goal_msg.start.pose.orientation.w = 1.0
+        goal_msg.use_start = True
 
-        req.goal.header.frame_id = 'map'
-        req.goal.pose.position.x = goal_x
-        req.goal.pose.position.y = goal_y
-        req.goal.pose.orientation.w = 1.0
-        req.planner_id = 'GridBased'
+        goal_msg.goal.header.frame_id = 'map'
+        goal_msg.goal.pose.position.x = goal_x
+        goal_msg.goal.pose.position.y = goal_y
+        goal_msg.goal.pose.orientation.w = 1.0
+        goal_msg.planner_id = 'GridBased'
 
-        future = self.cli.call_async(req)
+        future = self.cli.call_async(goal_msg)
         # ReentrantCallbackGroup 덕분에 여기서 spin_until_future_complete를 써도 데드락 안 걸림
         rclpy.spin_until_future_complete(self, future)
         

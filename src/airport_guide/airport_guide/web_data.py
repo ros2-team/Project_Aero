@@ -13,7 +13,7 @@ class WebBridgeNode(Node):
         self.blackboard = blackboard 
         
         ### 서버 주소
-        self.flask_base_url = "http://192.168.0.9:5000  " 
+        self.flask_base_url = "http://192.168.0.9:5000" 
         ###
         self.last_handled_command_id = -1             
         self.polling_interval = 0.5                   
@@ -73,10 +73,10 @@ class WebBridgeNode(Node):
                                     current_order = current_wp.get("order", 0)
                                     
                                     # 🚦 1. Gate A ↔ C 또는 Gate B ↔ C 구간인 경우 -> Right 경유지 주입
-                                    if (current_name == "Gate_A" and next_name == "Gate_C") or \
-                                       (current_name == "Gate_C" and next_name == "Gate_A") or \
-                                       (current_name == "Gate_B" and next_name == "Gate_C") or \
-                                       (current_name == "Gate_C" and next_name == "Gate_B"):
+                                    if (current_name == "게이트 A" and next_name == "게이트 C") or \
+                                       (current_name == "게이트 C" and next_name == "게이트 A") or \
+                                       (current_name == "게이트 B" and next_name == "게이트 C") or \
+                                       (current_name == "게이트 C" and next_name == "게이트 B"):
                                         
                                         right_mid = {
                                             "order": current_order,          # 에러 방지용 순서 동기화
@@ -89,8 +89,14 @@ class WebBridgeNode(Node):
                                         }
                                         processed_route.append(right_mid)
                                         self.get_logger().info(f"🔄 [Route Planner] {current_name} ↔ {next_name} (특수구간) -> Right 경유지 강제 주입")
-                                    
-                                    # 🚦 2. 화장실, 면세점 등 그 외의 모든 구간 -> 무조건 Left 경유지 주입
+
+                                    # 2.게이트 A ↔ 게이트 B 구간인 경우 -> 경유지 없이 프리패스!
+                                    elif (current_name == "게이트 A" and next_name == "게이트 B") or \
+                                        (current_name == "게이트 B" and next_name == "게이트 A"):
+                                        
+                                        self.get_logger().info(f"🚀 [Route Planner] {current_name} ↔ {next_name} (직선구간) -> 경유지 패스, 최단거리 직행!")
+                                        pass # 아무것도 append 하지 않고 그냥 다음 목적으로 넘어갑니다.
+                                                                # 🚦 2. 화장실, 면세점 등 그 외의 모든 구간 -> 무조건 Left 경유지 주입
                                     else:
                                         left_mid = {
                                             "order": current_order,
