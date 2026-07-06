@@ -3,10 +3,12 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
 from nav_msgs.msg import Odometry  
+from std_msgs.msg import Bool
 from cv_bridge import CvBridge
 from ultralytics import YOLO
 import time
 import cv2
+
 
 class FrontCameraNode(Node):
     def __init__(self, blackboard):
@@ -23,6 +25,15 @@ class FrontCameraNode(Node):
             self.image_callback,
             10
         )
+
+        self.human_far_sub = self.create_subscription(
+            Bool,
+            '/perception/human_far',
+            self.human_status_cb,
+            10
+        )
+
+
         self.odom_sub = self.create_subscription(
             Odometry,
             '/odom',
@@ -35,6 +46,10 @@ class FrontCameraNode(Node):
         self.last_results = None
 
         self.get_logger().info("✅ [Data Layer] Front Camera YOLO 노드가 가동되었습니다.")
+
+
+    def human_status_cb(self, data):
+        self.blackboard.human_far = data.data
 
     def odom_callback(self, msg):
         # [FACTS AREA WRITE]
