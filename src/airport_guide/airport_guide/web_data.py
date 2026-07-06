@@ -33,22 +33,29 @@ class WebBridgeNode(Node):
         self.get_logger().info("확정 API 기반 ROS2 Web Bridge Node 가동 시작.")
         self.polling_thread = threading.Thread(target=self._command_polling_loop, daemon=True)
         self.polling_thread.start()
-
+        
     def _command_polling_loop(self):
         """설정된 주기마다 Flask 서버를 폴링하며 새로운 명령이 생성되었는지 감시하는 루프"""
         while rclpy.ok():
             try:
                 response = requests.get(f"{self.flask_base_url}/api/robot/command", timeout=1.0)
+
                 if response.status_code == 200:
+
                     res_data = response.json()
+                    
                     if res_data.get("status") == "success":
+                        
                         command_data = res_data.get("command", {})
+
                         has_command = command_data.get("has_command", False)
+
                         is_handled = command_data.get("is_handled", True)
+                        
                         command_id = command_data.get("command_id", -1)
 
                         # 새로운 명령이 들어오고 새로들어온 명령어가 이전 id보다 크면 신규 명령으로 판단
-                        if has_command and not is_handled and (command_id > self.last_handled_command_id):
+                        if has_command and not is_handled and (command_id != self.last_handled_command_id):
                             self.get_logger().info(f"[새 명령 감지] ID: {command_id}, Type: {command_data.get('type')}")
                             self.get_logger().info(
                                 "\n" + "="*60 +
@@ -115,12 +122,25 @@ class WebBridgeNode(Node):
                             # self.blackboard.web_last_update_time = time.time()
                             # self.get_logger().info("📊 Planner가 보정한 데이터를 Blackboard 변수에 직대입 동기화 완료.")
                             
+                            # self.get_logger().info(
+                            #     "\n" + "="*60 +
+                            #     f"\n📥 [WEB DATA RAW JSON] ID: {command_id}" +
+                            #     f"\n🔹 전체 내용:\n{json.dumps(command_data, indent=2, ensure_ascii=False)}" +
+                            #     "\n" + "="*60
+                            # )
+                            
+                            raw_route = command_data.get("route", [])  # 웹에서 온 원래 경로 리스트
+                            processed_route = []                       # 새로 가공해서 담을 빈 리스트
+                            
+                            for wp in raw_route:
+                                processed_route.append(wp)
+                            
                             command_data["route"] = processed_route
+                            
                             self._publish_to_behavior_tree(command_data)
                             self._mark_command_as_handled(command_id)
                             self.last_handled_command_id = command_id
-                            
-                            
+            
             except requests.exceptions.RequestException as e:
                 self.get_logger().error(f"Flask 서버 폴링 중 통신 실패: {e}")
             
@@ -129,13 +149,17 @@ class WebBridgeNode(Node):
     def _publish_to_behavior_tree(self, command_data: dict):
         """로봇 내부 행동트리가 수신할 수 있도록 ROS2 토픽으로 직렬화하여 발행"""
         msg = String()
+
         msg.data = json.dumps({
             "action": command_data.get("type"),
-            "payload": {        # payload 안에 route 넣어서 패킹
+            "command_id": command_data.get("command_id"),
+            "payload": {
                 "route": command_data.get("route", [])
             }
-        })
+        }, ensure_ascii=False)
+
         self.web_command_pub.publish(msg)
+        
         self.get_logger().info("행동트리 수신용 ROS2 토픽 발행 완료.")
 
     def _mark_command_as_handled(self, command_id: int):
@@ -160,8 +184,11 @@ class WebBridgeNode(Node):
             # 🛠️ [구조 분류 1] robot_status_state 처리 (1초 주기 데이터)
             if "robot_status" in bt_data:
                 # 1초 주기로 들어오는 데이터는 상태 중복 체크 없이 '무조건' 전송해야 함
+                
                 url = f"{self.flask_base_url}/api/robot/status"  # Flask 측 로봇 상태 수신 주소
+                
                 res = requests.post(url, data=json.dumps(bt_data), headers=headers, timeout=1.0)
+                
                 if res.status_code != 200:
                     self.get_logger().error(f"robot_status_state 전송 실패 (HTTP: {res.status_code})")
                 return

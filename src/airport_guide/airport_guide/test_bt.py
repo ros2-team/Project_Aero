@@ -134,6 +134,12 @@ class AirportGuideBT(Node):
     def send_nav_goal(self, x, y):
         """ 🔄 [원복] Goal 메시지 생성 및 Nav2 액션 비동기 송신 인터페이스를 다시 메인 노드로 이관했습니다. """
         self.get_logger().info(f"🎯 Nav2 액션 목표 전송 시작: ({x}, {y})")
+
+        # 🛠️ [핵심 안전장치] 새 명령을 내리기 전, 기존 주행 핸들과 콜백 예약을 완전히 초기화합니다.
+        if hasattr(self, '_current_goal_handle') and self._current_goal_handle is not None:
+            # 기존 세션이 남아있다면 잔여 콜백 간섭을 막기 위해 제거
+            self._current_goal_handle = None 
+
         goal_msg = NavigateToPose.Goal()
         goal_msg.pose.header.frame_id = "map"
         goal_msg.pose.header.stamp = self.get_clock().now().to_msg()
@@ -176,8 +182,15 @@ class AirportGuideBT(Node):
 
     def _goal_result_callback(self, future):
         """ 🔄 [원복] 내비게이션 세션의 완료 상태를 감지하여 주행이 완결(DONE)되었음을 마킹하는 최종 콜백입니다. """
-        if self.blackboard.goal_state not in [GoalState.CANCELING, GoalState.IDLE]:
+        # 오직 정상 주행 중(RUNNING)일 때 들어온 완료 신호만 인정합니다.
+        # SENT, IDLE 상태 등 목적지 전환 직후에 들어오는 과거 유령 신호를 완벽히 차단합니다.
+        if self.blackboard.goal_state == GoalState.RUNNING:
             self.set_goal_state(GoalState.DONE)
+        else:
+            self.get_logger().warn(
+                f"⚠️ [FSM 가드] RUNNING이 아닌 상태({self.blackboard.goal_state.name})에서 "
+                f"과거 세션 결과가 유입되어 무시 처리했습니다."
+            )
         self._current_goal_handle = None
 
     def cancel_nav_goal(self):
