@@ -39,13 +39,9 @@ class AirportGuideBT(Node):
         super().__init__("airport_guide_bt")
         self.blackboard = blackboard
         
-        # 🔄 [원복 완료] bt_nodes에서 복잡한 통신 자원을 제거하고 메인 노드가 온전히 독점하도록 롤백했습니다.
         self.nav_client = ActionClient(self, NavigateToPose, '/navigate_to_pose')
-
-        # 🔄 [원복 완료] bt_nodes 내에 결합되어 있던 비동기 액션 서버용 상태 추적 핸들러를 메인 클래스 멤버로 복원했습니다.
         self._current_goal_handle = None
         
-        # 🛠️ [시니어 조치 - 추가] 세션 간 독립성을 보장하기 위해 비동기 Future 핸들러 전용 인스턴스 변수를 명시적 초기화합니다.
         self._send_goal_future = None
         self._get_result_future = None
         
@@ -113,7 +109,6 @@ class AirportGuideBT(Node):
         self.root.add_child(nav_br)          # 8순위: 모든 예외가 없을 때 자율주행 실행
         self.root.add_child(ActionIdle("SystemIdle")) # 9순위: 정말 아무것도 안 할 때의 대기
 
-        # 웹 상태 변경 감지 및 주기 제어를 위한 변수 초기화
         self.last_robot_status_pub_time = 0.0
         self.last_nav_status = None
         self.last_nav_current_index = None
@@ -130,22 +125,15 @@ class AirportGuideBT(Node):
             if self.blackboard.goal_state == GoalState.CANCELING:
                 self.set_goal_state(GoalState.IDLE)
 
-
-    # =====================================================================
-    # 🔄 [원복 완료 지점] bt_nodes 레이어로부터 회수하여 메인 트리로 원상복구시킨 제어 로직들
-    # =====================================================================
-
     def send_nav_goal(self, x, y):
-        """ 🚀 [주행 제어] Nav2 액션 서버로 새로운 목적지를 비동기 전송합니다. """
         self.get_logger().info(f"🎯 Nav2 액션 목표 전송 시작: ({x}, {y})")
 
-        # 🛡️ [시니어 조치 - 방어벽 1] 새 명령을 내리기 전, 기존 주행 세션들의 비동기 Future 핸들 잔재를 완전히 파괴합니다.
         if hasattr(self, '_send_goal_future') and self._send_goal_future is not None:
-            self._send_goal_future.cancel()  # rclpy 이벤트 큐에 물려있던 유령 응답 스케줄 취소
+            self._send_goal_future.cancel()
             self._send_goal_future = None
             
         if hasattr(self, '_get_result_future') and self._get_result_future is not None:
-            self._get_result_future.cancel()  # rclpy 이벤트 큐에 물려있던 유령 결과 스케줄 취소
+            self._get_result_future.cancel()
             self._get_result_future = None
 
         if hasattr(self, '_current_goal_handle') and self._current_goal_handle is not None:
@@ -160,24 +148,16 @@ class AirportGuideBT(Node):
 
         self.nav_client.wait_for_server()
         
-        # 7/6 비동기 골 Future 객체를 인스턴스 전용 격리 공간인 self._send_goal_future에 완벽 보관
         self._send_goal_future = self.nav_client.send_goal_async(goal_msg)
-        
-        # 비동기 응답 타깃 메서드를 메인 노드의 수락 콜백 함수로 연동합니다.
         self._send_goal_future.add_done_callback(self._goal_response_callback)
-
-        # 액션 요청을 쏘자마자 즉시 SENT 상태로 명시 변경하여 0.1초 뒤 트리의 연속 호출 현상을 차단합니다.
         self.set_goal_state(GoalState.SENT)
 
     def set_goal_state(self, new_state: GoalState):
-        """ 🔄 [원복] 블랙보드 내부 FSM 전이 권한 및 상태 변경 공통 메서드를 메인 트리 본체로 복원했습니다. """
         old_state = self.blackboard.goal_state
         self.blackboard.goal_state = new_state
         self.get_logger().info(f"🔁 [FSM] goal_state: {old_state.name} -> {new_state.name}")
 
     def _goal_response_callback(self, future):
-        """ 🔄 [2단계: Nav2 서버의 목표 수락 여부 확인 콜백] """
-        # 7/6 상태 정합성 검증 가드벽 추가
         if self.blackboard.goal_state != GoalState.SENT:
             self.get_logger().warn("⚠️ [FSM 가드] SENT 상태가 아닐 때 유입된 목표 수락 응답이므로 폐기 처리합니다.")
             return
@@ -190,43 +170,29 @@ class AirportGuideBT(Node):
 
         self.get_logger().info("✅ Nav2 서버가 목표를 최종 수락했습니다. 로봇 주행 전이를 시작합니다.")
         self._current_goal_handle = goal_handle
-        
-        # 하부 하드웨어가 명령을 공식 수락한 그 물리 시점에 철저하게 RUNNING 상태로 동기화합니다.
         self.set_goal_state(GoalState.RUNNING)
 
-        # 7/6 수락된 최신 골 핸들 본체(goal_handle)로부터 '순수한 결과 동기화 비동기 객체'를 정밀 호출하여 바인딩합니다.
-        # 이전 힙 메모리 체인에 남아 유령 신호를 터트리던 원천 원인을 완벽 소멸시킵니다.
         self._get_result_future = goal_handle.get_result_async()
         self._get_result_future.add_done_callback(self._goal_result_callback)
 
     def _goal_result_callback(self, future):
-        """ 🔄 [3단계: 내비게이션 세션 완결 처리 콜백] """
-        # 🛡️ [시니어 조치 - 방어벽 3] 오직 정상 주행 중(RUNNING)일 때 들어온 완료 신호만 정식 전이로 인정합니다.
-        # SENT, IDLE 상태 등 목적지 전환 직후에 들어오는 과거 유령 신호를 완벽히 차단합니다.
+        """ 🔄 [3단계: 내비게이션 세션 자원 관리 콜백] """
         if self.blackboard.goal_state != GoalState.RUNNING:
-            self.get_logger().warn(
-                f"⚠️ [FSM 가드] RUNNING이 아닌 상태({self.blackboard.goal_state.name})에서 "
-                f"과거 세션 결과가 유입되어 무시 처리했습니다."
-            )
             return
 
-        # ---------------------------------------------------------------------
-        # 여기서부터 기존 코드를 덮어쓰며 무결성 검증 로직이 수행됩니다.
-        # ---------------------------------------------------------------------
         try:
             # [필수 검증] 수신된 실제 액션 상태 결과 추출
             action_result = future.result()
             action_status = action_result.status
-            
-            # 로그를 통해 실제 상태(숫자 값)를 가장 먼저 확인합니다.
-            self.get_logger().info(f"📊 [디버그 계측] Nav2 액션 서버가 복귀시킨 실제 Status 코드: {action_status}")
+            self.get_logger().info(f"📊 [디버그 계측] Nav2 액션 서버 복귀 Status 코드: {action_status}")
 
-            # 4는 rclpy/action_msgs 기준 SUCCEEDED(성공)을 의미합니다.
             if action_status == 4: 
-                self.get_logger().info(f"🏁 [도착 성공] 목적지에 무사히 도착하여 세션을 완료합니다.")
-                self.set_goal_state(GoalState.DONE)
+                # Nav2 물리 도달 성공 시 DONE으로 바로 밀지 않습니다.
+                # ArrivalNode가 남은 거리 계측 및 5초 대기를 보장할 수 있도록 로그만 출력하고 상태 제어권을 양보합니다.
+                self.get_logger().info(f"🏁 [Nav2 도착 성공] 하부 주행 도달 완료. ArrivalNode의 정밀 도달/대기 판정을 기다립니다.")
+                # self.set_goal_state(GoalState.DONE)
             else:
-                # 취소(5)나 실패(6)인 경우 DONE으로 가면 안 되므로 IDLE로 안전 원복시킵니다.
+                # 실패나 취소 시에만 복구 동작 유도를 위해 IDLE 전이
                 self.get_logger().error(f"주행이 성공하지 못했습니다. (Status: {action_status})")
                 self.set_goal_state(GoalState.IDLE)
 
@@ -234,7 +200,8 @@ class AirportGuideBT(Node):
             self.get_logger().error(f"결과 상태 파싱 중 치명적 예외 발생: {e}")
             self.set_goal_state(GoalState.IDLE)
         finally:
-            # 주행 완료 혹은 오판 무시 시점 이후, 인스턴스 전용 핸들링 포인터를 리셋하여 메모리를 클리어합니다.
+            # 주행 완료 혹은 오판 무시 시점 이후, 
+            # 인스턴스 전용 핸들링 포인터를 리셋하여 메모리를 클리어합니다.
             self._get_result_future = None
             self._current_goal_handle = None
 
@@ -245,7 +212,6 @@ class AirportGuideBT(Node):
                 self._current_goal_handle.cancel_goal_async()
             else:
                 self.set_goal_state(GoalState.IDLE)
-
 
     # *********** 디버깅 및 웹 상태 보고 코드 **********************
     def bt_tick(self):
@@ -264,6 +230,7 @@ class AirportGuideBT(Node):
             try:
                 robot_status_payload = {
                     "battery": int(getattr(self.blackboard, "battery_level", 100.0)),
+                    "x": float(getattr(getattr(self.blackboard, "current_x", 0.0), "current_x", 0.0) if hasattr(self.blackboard, "current_x") else 0.0),
                     "x": float(getattr(self.blackboard, "current_x", 0.0)),
                     "y": float(getattr(self.blackboard, "current_y", 0.0)),
                     "yaw": float(getattr(self.blackboard, "current_yaw", 0.0)),
@@ -274,21 +241,19 @@ class AirportGuideBT(Node):
                 msg_status = String()
                 msg_status.data = json.dumps(robot_status_payload)
                 self.bt_status_pub.publish(msg_status)
-                
                 self.last_robot_status_pub_time = current_time
-                
             except Exception as e:
                 self.get_logger().error(f"robot_status_state 발행 실패: {e}", throttle_duration_sec=3.0)
 
-
         # ---------------------------------------------------------------------
-        # [2] navigation_state 발행 (상태 변경 시 발행)
+        # [2] navigation_state 발행 (상태 변경 시 발행) - 🎯 원본 웹 인터페이스 규격 복원 및 인덱싱 동기화
         # ---------------------------------------------------------------------
         try:
             current_nav_status = self.blackboard.goal_state.name.lower() if self.blackboard.goal_state else "idle"
             current_route = getattr(self.blackboard, "web_route_list", [])
             current_is_paused = getattr(self.blackboard, "is_paused", False)
             current_index = getattr(self.blackboard, "current_waypoint_index", 0) 
+            current_goal_name = getattr(self.blackboard, "goal_name", "")
 
             is_nav_changed = (
                 current_nav_status != self.last_nav_status or
@@ -298,19 +263,26 @@ class AirportGuideBT(Node):
             )
 
             if is_nav_changed:
+                # 관제 브릿지 파싱 에러 방지를 위해 원본 스키마("status", "route", "current_target") 엄격 준수
                 navigation_payload = {
                     "status": current_nav_status,
                     "type": getattr(self.blackboard, "web_action", None),
-                    "route": current_route,
+                    "current_target": current_goal_name,  # 실시간 파싱 추적용 보완 자원 추가
+                    "route": current_route,               # 원본 경로 보존 및 실시간 웹 매핑 지원
                     "current_index": current_index,
-                    "is_paused": current_is_paused
+                    "is_paused": current_is_paused,
+                    "navigation_active": getattr(self.blackboard, "navigation_active", False),
+                    "navigation_finished": getattr(self.blackboard, "navigation_finished", False)
                 }
                 
                 msg_nav = String()
                 msg_nav.data = json.dumps(navigation_payload)
                 self.bt_status_pub.publish(msg_nav)
                 
-                self.get_logger().info(f"📢 [웹 피드백] navigation_state 변경 발송 -> status: {current_nav_status}")
+                self.get_logger().info(
+                    f"📢 [웹 피드백] navigation_state 변경 발송 -> status: {current_nav_status}, "
+                    f"타깃명: {current_goal_name}, Index: {current_index}"
+                )
                 
                 self.last_nav_status = current_nav_status
                 self.last_nav_current_index = current_index
@@ -321,7 +293,7 @@ class AirportGuideBT(Node):
             self.get_logger().error(f"navigation_state 발행 실패: {e}", throttle_duration_sec=3.0)
 
         # ---------------------------------------------------------------------
-        # 실제 행동트리 실행 (얇아진 ActionMoveToGoal 노드가 메인의 원복된 함수들을 안전하게 교차 타깃 호출)
+        # 실제 행동트리 실행
         # ---------------------------------------------------------------------
         self.root.tick(self.blackboard, self)
 
