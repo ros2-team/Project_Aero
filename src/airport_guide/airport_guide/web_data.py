@@ -118,11 +118,11 @@ class WebBridgeNode(Node):
                             #     "\n" + "="*60
                             # )
                             
-                            raw_route = command_data.get("route", [])  # 웹에서 온 원래 경로 리스트
-                            processed_route = []                       # 새로 가공해서 담을 빈 리스트
+                            # raw_route = command_data.get("route", [])  # 웹에서 온 원래 경로 리스트
+                            # processed_route = []                       # 새로 가공해서 담을 빈 리스트
                             
-                            for wp in raw_route:
-                                processed_route.append(wp)
+                            # for wp in raw_route:
+                            #     processed_route.append(wp)
                             
                             command_data["route"] = processed_route
                             

@@ -42,14 +42,14 @@ class Sequence(BTNode):
 # 0. 배터리 브랜치
 class ConditionBatteryLow(BTNode):
     def tick(self, blackboard, ros_node):
-        return "SUCCESS" if blackboard.battery_low else "FAILURE"
+        return "SUCCESS" if blackboard.battery_level < 35 else "FAILURE"
 
 class ActionSystemShutdown(BTNode):
     def tick(self, blackboard, ros_node):
         if blackboard.charging_state == ChargingState.IDLE:
             ros_node.get_logger().error("🔋 배터리 부족 감지 -> 충전소 이동 시작")
             ros_node.cancel_nav_goal()
-            ros_node.send_nav_goal(-0.07, -0.5)
+            ros_node.send_nav_goal(0.4, -1.54)
             blackboard.charging_state = ChargingState.MOVING
         return "RUNNING"
 
