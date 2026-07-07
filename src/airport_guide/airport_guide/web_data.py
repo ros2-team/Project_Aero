@@ -19,7 +19,7 @@ class WebBridgeNode(Node):
         self.last_nav_status = None
         self.web_command_pub = self.create_publisher(String, "/web/command", 10)
 
-        # 7/7 현재 주행 중인 보정 경로 데이터를 보존하기 위한 로컬 캐시 추가
+        # 현재 주행 중인 보정 경로 데이터를 보존하기 위한 로컬 캐시 추가
         self.active_processed_route = []
 
 
@@ -104,15 +104,15 @@ class WebBridgeNode(Node):
                                             "order": current_order,
                                             "location_code": "MID_LEFT",
                                             "location_name": "Corner_Left_Mid",
-                                            "x": -0.37,
-                                            "y": -0.08,
+                                            "x": -0.43,
+                                            "y": 0.08,
                                             "yaw": 0.0,
                                             "is_mid_point": True
                                         }
                                         processed_route.append(left_mid)
                                         self.get_logger().info(f"🔄 [Route Planner] {current_name} ↔ {next_name} (일반구간) -> Left 경유지 무조건 주입")
 
-                            # 7/7 가공 완료된 경로를 필터링 판정용 멤버 변수에 캐싱
+                            # 가공 완료된 경로를 필터링 판정용 멤버 변수에 캐싱
                             self.active_processed_route = processed_route
                             
                             command_data["route"] = processed_route
@@ -234,7 +234,7 @@ class WebBridgeNode(Node):
                 current_index = int(bt_data.get("current_index", 0))
                 goal_state = str(bt_data.get("goal_state", bt_data.get("status", ""))).lower()
 
-                # 🛠️ [강력한 중간 경유지 판정 필터]
+                # 🛠️ [중간 경유지/일시정지 복합 제어 가드]
                 is_mid_point_active = False
 
                 # Case 1: 현재 가리키는 인덱스가 중간 경유지인 경우
@@ -242,17 +242,17 @@ class WebBridgeNode(Node):
                     if self.active_processed_route[current_index].get("is_mid_point", False):
                         is_mid_point_active = True
 
-                # Case 2: 로봇이 도착해서 인덱스를 이미 다음 칸으로 올려버린 상태(done)인 경우 (직전 방 검사)
+                # Case 2: 로봇이 도착해서 인덱스를 이미 다음 칸으로 올린 시점(done)인 경우 (직전 방 검사)
                 if goal_state == "done" and current_index > 0:
                     prev_index = current_index - 1
                     if prev_index < len(self.active_processed_route):
                         if self.active_processed_route[prev_index].get("is_mid_point", False):
                             is_mid_point_active = True
 
-                # 🎯 변환 함수 호출해서 임시 웹 상태 생성
+                # 🎯 내부 상태를 웹 상태 규격으로 가공
                 web_status = self._convert_bt_goal_state_to_web_status(bt_data)
 
-                # 🚫 만약 중간 경유지와 조금이라도 얽힌 상태라면, 절대로 finished가 뜨지 못하게 moving으로 강제 고정!
+                # 🚫 중간 경유지와 얽힌 상태라면 finished 출력을 차단하고 moving으로 강제 고정
                 if is_mid_point_active:
                     self.get_logger().info("🚧 [중간경유지 가드 감지] 웹 상태를 moving으로 강제 유지합니다.")
                     web_status = "moving"
