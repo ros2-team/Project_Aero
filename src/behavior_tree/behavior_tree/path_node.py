@@ -46,7 +46,7 @@ class IndependentPathPreprocessor(Node):
         """웹에서 새 주행 명령이 떨어지면 낚아채서 전처리 시작"""
         try:
             command_data = json.loads(msg.data)
-            self.get_logger().info("일단 받았습니다 !!!!!!!!!!!!!!!!!!!!!!!!")
+            # self.get_logger().info("일단 받았습니다 !!!!!!!!!!!!!!!!!!!!!!!!")
             # 주행 명령("navigation_route")일 때만 작동
             if command_data.get("action") == "navigation_route":
                 route_list = command_data.get("payload", {}).get("route", [])

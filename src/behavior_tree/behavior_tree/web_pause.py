@@ -26,7 +26,7 @@ class WebPauseNode(Node):
 
             # 2) [FACTS AREA WRITE] 명령 종류별 블랙보드 상태 전처리 및 직접 대입
             if action_type == "pause_navigation":
-                print("******************토픽 수신 완완완완완완*************************")
+                # print("******************토픽 수신 완완완완완완*************************")
                 # [일시정지] 메모리는 유지하되, 트리 진입을 위해 플래그 설정
                 
                 self.blackboard.is_paused = True 
@@ -48,7 +48,7 @@ class WebPauseNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    from airport_guide.blackboard import Blackboard
+    from behavior_tree.blackboard import Blackboard
     db = Blackboard()
     node = WebPauseNode(blackboard=db)
     

@@ -5,7 +5,7 @@ from std_msgs.msg import Float32MultiArray
 import cv2
 import numpy as np
 from ultralytics import YOLO
-from robot_test.hsv_tracker import HsvTracker
+from perception.hsv_tracker import HsvTracker
 
 class SimpleYoloDetector(Node):
     def __init__(self):
@@ -18,7 +18,7 @@ class SimpleYoloDetector(Node):
         self.pub_bbox = self.create_publisher(Float32MultiArray, '/target/bounding_box_x', 10)
         
         ### 퍼포먼스 확인을 위한 결과 이미지 발행 (옵션)
-        self.pub_result_img = self.create_publisher(CompressedImage, '/cam_rear/yolo/compressed', 10)
+        # self.pub_result_img = self.create_publisher(CompressedImage, '/cam_rear/yolo/compressed', 10)
         
         ### YOLOv8 Nano 모델 로드 (가장 가벼운 모델)
         self.yolo = YOLO('yolov8n.pt')
@@ -58,7 +58,7 @@ class SimpleYoloDetector(Node):
                 
                 ### 새로운 데이터를 구했으니 갱신
                 self.last_bbox_msg.data = [xmin, center_x, xmax]
-                self.get_logger().info(f"현재 센터 값 x: {center_x:.1f}")
+                # self.get_logger().info(f"현재 센터 값 x: {center_x:.1f}")
 
             else:
                 self.last_bbox_msg.data = [-1.0, -1.0, -1.0]
@@ -66,21 +66,8 @@ class SimpleYoloDetector(Node):
             # ### 시각화 이미지 갱신 -> 프레임 너무 잡아먹음
             # self.last_annotated_frame = results[0].plot()
 
-
         ### 데이터 송출 (매 프레임 실행)
         self.pub_bbox.publish(self.last_bbox_msg)
-
-        ### 결과 이미지 송출 (rqt에서 눈으로 확인하기 위함) -> 이것도 프레임 너무 잡아먹음
-        # img_to_pub = self.last_annotated_frame if self.last_annotated_frame is not None else frame
-
-        # _, compressed_img = cv2.imencode('.jpg', img_to_pub)
-
-        # ### 이미지 파일 yolo 토픽으로 publish
-        # msg_out = CompressedImage()
-        # msg_out.header = msg.header ### 타임스탬프는 현재 들어온 이미지의 시간을 그대로 씀
-        # msg_out.format = "jpeg"
-        # msg_out.data = compressed_img.tobytes()
-        # self.pub_result_img.publish(msg_out)
 
 def main(args=None):
     rclpy.init(args=args)

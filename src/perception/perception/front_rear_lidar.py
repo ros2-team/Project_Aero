@@ -7,7 +7,7 @@ from cv_bridge import CvBridge
 import cv2
 from rclpy.qos import qos_profile_sensor_data
 import math
-from robot_test_msgs.msg import LidarScanData
+from ar_interfaces.msg import LidarScanData
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
 class ScanLidar(Node):
@@ -62,15 +62,15 @@ class ScanLidar(Node):
         r_angles, r_dists = r_angles[r_idx], r_dists[r_idx]
 
         # 6. 퍼블리시 or 로그 출력
-        if len(f_angles):
-            out = ", ".join([f"[{a:.1f}°:{d:.1f}cm]"
-                            for a, d in zip(f_angles, f_dists)])
-            self.get_logger().info(f"전방 감지 ({len(f_angles)}개): {out}")
+        # if len(f_angles):
+        #     out = ", ".join([f"[{a:.1f}°:{d:.1f}cm]"
+        #                     for a, d in zip(f_angles, f_dists)])
+        #     self.get_logger().info(f"전방 감지 ({len(f_angles)}개): {out}")
 
-        if len(r_angles):
-            out = ", ".join([f"[{a:.1f}°:{d:.1f}cm]"
-                            for a, d in zip(r_angles, r_dists)])
-            self.get_logger().info(f"후방 감지 ({len(r_angles)}개): {out}")
+        # if len(r_angles):
+        #     out = ", ".join([f"[{a:.1f}°:{d:.1f}cm]"
+        #                     for a, d in zip(r_angles, r_dists)])
+        #     self.get_logger().info(f"후방 감지 ({len(r_angles)}개): {out}")
 
         self.front_pub(f_angles, f_dists)
         self.rear_pub(r_angles, r_dists)

@@ -103,7 +103,6 @@ class AirportGuideBT(Node):
         nav_br.add_child(ActionMoveToGoal("MoveToGoal"))
 
         # 최상위 Selector 자식 순서 배치
-        self.root.add_child(nav_br)          # 8순위: 모든 예외가 없을 때 자율주행 실행
         self.root.add_child(battery_br)      # 1순위: 배터리 방전 체크 
         self.root.add_child(sensor_br)       # 2순위: 센서 통신 끊김 체크
         self.root.add_child(emergency_br)    # 3순위: 전방 급정거/복구 체크
@@ -111,6 +110,7 @@ class AirportGuideBT(Node):
         self.root.add_child(human_hub)       # 5순위: 사람 유실/멀어짐 체크
         self.root.add_child(avoid_br)        # 6순위: 장애물 회피 체크
         self.root.add_child(arrival_br)      # 7순위: 목적지 도착 세션 체크
+        self.root.add_child(nav_br)          # 8순위: 모든 예외가 없을 때 자율주행 실행
         self.root.add_child(ActionIdle("SystemIdle")) # 9순위: 정말 아무것도 안 할 때의 대기
 
         # 웹 상태 변경 감지 및 주기 제어를 위한 변수 초기화

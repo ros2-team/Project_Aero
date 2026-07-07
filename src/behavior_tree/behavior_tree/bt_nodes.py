@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import rclpy
-from airport_guide.blackboard import GoalState, ChargingState
+from behavior_tree.blackboard import GoalState, ChargingState
 
 class BTNode:
     def __init__(self, name):
@@ -42,14 +42,14 @@ class Sequence(BTNode):
 # 0. 배터리 브랜치
 class ConditionBatteryLow(BTNode):
     def tick(self, blackboard, ros_node):
-        return "SUCCESS" if blackboard.battery_low else "FAILURE"
+        return "SUCCESS" if blackboard.battery_level < 35 else "FAILURE"
 
 class ActionSystemShutdown(BTNode):
     def tick(self, blackboard, ros_node):
         if blackboard.charging_state == ChargingState.IDLE:
             ros_node.get_logger().error("🔋 배터리 부족 감지 -> 충전소 이동 시작")
             ros_node.cancel_nav_goal()
-            ros_node.send_nav_goal(-0.07, -0.5)
+            ros_node.send_nav_goal(0.4, -1.54)
             blackboard.charging_state = ChargingState.MOVING
         return "RUNNING"
 
@@ -89,7 +89,7 @@ class ConditionEmergency(BTNode):
     # 위험 해제 후의 복구(재출발 준비) 로직은 별도 Action 노드로 분리했다.
     # Condition은 상태를 절대 바꾸지 않고 SUCCESS/FAILURE만 보고한다.
     def tick(self, blackboard, ros_node):
-        if blackboard.is_dynamic_obstacle and blackboard.front_obstacle_distance <= 1.2:
+        if blackboard.front_obstacle_distance <= 70:
             return "SUCCESS"
         return "FAILURE"
 
