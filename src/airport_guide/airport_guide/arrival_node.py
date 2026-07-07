@@ -88,12 +88,6 @@ class ArrivalNode(Node):
         self.blackboard.last_sensor_time = time.time()
         self.blackboard.sensor_timeout = False
 
-    # def odom_callback(self, msg):
-    #     self.blackboard.current_x = msg.pose.pose.position.x
-    #     self.blackboard.current_y = msg.pose.pose.position.y
-    #     self.blackboard.last_sensor_time = time.time()
-    #     self.blackboard.sensor_timeout = False
-
     def check_arrival(self):
         if self.blackboard.web_action == "stop_navigation":
             self.get_logger().warn("🛑 [Web Command] 주행 종료 명령 수신. 모든 경로 데이터를 리셋합니다.")

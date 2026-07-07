@@ -68,49 +68,92 @@ class WebBridgeNode(Node):
                             raw_route = command_data.get("route", [])
                             processed_route = []
 
-                            # 경로 리스트를 돌면서 중간 경유지 자동 주입
+                            # 🌟 1. 현재 로봇의 출발 위치 이름을 가져옵니다. (위쪽 코드 스타일과 통일)
+                            current_location = command_data.get("location_name", "대기소") 
+
+                            # 🚀 2. 맨 처음 출발할 때 선행 경유지 주입 로직
+                            if raw_route:
+                                first_wp = raw_route[0]
+                                first_name = first_wp.get("location_name")
+                                first_order = first_wp.get("order", 0)
+
+                                # 🚨 [예외 처리] 현재 위치가 A고 첫 목적지가 B (또는 B->A)인 직선구간 프리패스!
+                                if (current_location == "게이트 A" and first_name == "게이트 B") or \
+                                (current_location == "게이트 B" and first_name == "게이트 A"):
+                                    
+                                    self.get_logger().info(f"🚀 [Route Planner] 출발지({current_location}) ↔ 첫 목적지({first_name}) : 직선구간 프리패스! (선행 경유지 생략)")
+                                    # 아무 경유지도 넣지 않고 바로 첫 목적지로 직행합니다.
+
+                                # 일반적인 출발 상황 (첫 목적지가 A/B면 Right, 나머지는 Left)
+                                elif first_name in ["게이트 A", "게이트 B"]:
+                                    initial_mid = {
+                                        "location_code": "MID_RIGHT",
+                                        "location_name": "Corner_Right_Mid",
+                                        "order": first_order, 
+                                        "x": 0.44,
+                                        "y": 0.08,
+                                        "yaw": 0.0,
+                                        "is_mid_point": True
+                                    }
+                                    processed_route.append(initial_mid)
+                                    self.get_logger().info(f"🚩 [Route Planner] 출발지({current_location}) -> {first_name} : Right 경유지 먼저 거치고 출발!")
+                                    
+                                else:
+                                    initial_mid = {
+                                        "location_code": "MID_LEFT",
+                                        "location_name": "Corner_Left_Mid",
+                                        "order": first_order,
+                                        "x": -0.37,
+                                        "y": -0.08,
+                                        "yaw": 0.0,
+                                        "is_mid_point": True
+                                    }
+                                    processed_route.append(initial_mid)
+                                    self.get_logger().info(f"🚩 [Route Planner] 출발지({current_location}) -> {first_name} : Left 경유지 먼저 거치고 출발!")
+
+
+                            # 🔄 3. 기존 로직: 경로 리스트를 돌면서 중간 경유지 자동 주입
                             for i in range(len(raw_route)):
                                 current_wp = raw_route[i]
-                                # 원래 웹에서 온 목적지는 중간 경유지가 아니므로 명시적 플래그 부여
-                                current_wp["is_mid_point"] = False
-                                processed_route.append(current_wp)  # 현재 위치 추가
+                                processed_route.append(current_wp)  # 목적지 추가
                                 
-                                # 마지막 목적지가 아니라면, '현재 위치'와 '다음 위치' 사이의 이동을 검사
+                                # 마지막 목적지가 아니라면, '현재 목적지'와 '다음 목적지' 사이의 이동을 검사
                                 if i < len(raw_route) - 1:
                                     current_name = current_wp.get("location_name")
                                     next_name = raw_route[i+1].get("location_name")
                                     current_order = current_wp.get("order", 0)
                                     
-                                    # 🚦 1. Gate A ↔ C 또는 Gate B ↔ C 구간인 경우 -> Right 경유지 주입
+                                    # 🚦 Gate A ↔ C 또는 Gate B ↔ C 구간인 경우 -> Right 경유지 주입
                                     if (current_name == "게이트 A" and next_name == "게이트 C") or \
-                                       (current_name == "게이트 C" and next_name == "게이트 A") or \
-                                       (current_name == "게이트 B" and next_name == "게이트 C") or \
-                                       (current_name == "게이트 C" and next_name == "게이트 B"):
+                                    (current_name == "게이트 C" and next_name == "게이트 A") or \
+                                    (current_name == "게이트 B" and next_name == "게이트 C") or \
+                                    (current_name == "게이트 C" and next_name == "게이트 B"):
                                         
                                         right_mid = {
-                                            "order": current_order,          # 에러 방지용 순서 동기화
-                                            "location_code": "MID_RIGHT",   # 에러 방지용 더미 코드
+                                            "location_code": "MID_RIGHT",   
                                             "location_name": "Corner_Right_Mid",
+                                            "order": current_order,          
                                             "x": 0.44,
                                             "y": 0.08,
-                                            "yaw": 0.0,                     # 에러 방지용 더미 방향
+                                            "yaw": 0.0,                     
                                             "is_mid_point": True
                                         }
                                         processed_route.append(right_mid)
                                         self.get_logger().info(f"🔄 [Route Planner] {current_name} ↔ {next_name} (특수구간) -> Right 경유지 강제 주입")
 
-                                    # 2.게이트 A ↔ 게이트 B 구간인 경우 -> 경유지 없이 프리패스!
+                                    # 🚦 게이트 A ↔ 게이트 B 구간인 경우 -> 경유지 없이 프리패스!
                                     elif (current_name == "게이트 A" and next_name == "게이트 B") or \
                                         (current_name == "게이트 B" and next_name == "게이트 A"):
                                         
                                         self.get_logger().info(f"🚀 [Route Planner] {current_name} ↔ {next_name} (직선구간) -> 경유지 패스, 최단거리 직행!")
-                                        pass # 아무것도 append 하지 않고 그냥 다음 목적으로 넘어갑니다.
-                                                                # 🚦 2. 화장실, 면세점 등 그 외의 모든 구간 -> 무조건 Left 경유지 주입
+                                        pass 
+                                        
+                                    # 🚦 화장실, 면세점 등 그 외의 모든 구간 -> 무조건 Left 경유지 주입
                                     else:
                                         left_mid = {
-                                            "order": current_order,
                                             "location_code": "MID_LEFT",
                                             "location_name": "Corner_Left_Mid",
+                                            "order": current_order,
                                             "x": -0.37,
                                             "y": -0.08,
                                             "yaw": 0.0,

@@ -89,7 +89,7 @@ class ConditionEmergency(BTNode):
     # 위험 해제 후의 복구(재출발 준비) 로직은 별도 Action 노드로 분리했다.
     # Condition은 상태를 절대 바꾸지 않고 SUCCESS/FAILURE만 보고한다.
     def tick(self, blackboard, ros_node):
-        if blackboard.is_dynamic_obstacle and blackboard.front_obstacle_distance <= 1.2:
+        if blackboard.front_obstacle_distance is not None and blackboard.front_obstacle_distance <= 10:
             return "SUCCESS"
         return "FAILURE"
 
