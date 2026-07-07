@@ -19,6 +19,10 @@ class WebBridgeNode(Node):
         self.last_nav_status = None
         self.web_command_pub = self.create_publisher(String, "/web/command", 10)
 
+        # 현재 주행 중인 보정 경로 데이터를 보존하기 위한 로컬 캐시 추가
+        self.active_processed_route = []
+
+
         # 행동트리 상태 모니터링
         self.bt_status_sub = self.create_subscription(
             String, "/robot/bt_status", self._bt_status_callback, 10
@@ -60,6 +64,8 @@ class WebBridgeNode(Node):
                             # 경로 리스트를 돌면서 중간 경유지 자동 주입
                             for i in range(len(raw_route)):
                                 current_wp = raw_route[i]
+                                # 원래 웹에서 온 목적지는 중간 경유지가 아니므로 명시적 플래그 부여
+                                current_wp["is_mid_point"] = False
                                 processed_route.append(current_wp)  # 현재 위치 추가
                                 
                                 # 마지막 목적지가 아니라면, '현재 위치'와 '다음 위치' 사이의 이동을 검사
@@ -106,23 +112,8 @@ class WebBridgeNode(Node):
                                         processed_route.append(left_mid)
                                         self.get_logger().info(f"🔄 [Route Planner] {current_name} ↔ {next_name} (일반구간) -> Left 경유지 무조건 주입")
 
-                            # self.blackboard.web_action = command_data.get("type")
-                            # self.blackboard.web_route_list = processed_route
-                            # self.blackboard.web_last_update_time = time.time()
-                            # self.get_logger().info("📊 Planner가 보정한 데이터를 Blackboard 변수에 직대입 동기화 완료.")
-                            
-                            # self.get_logger().info(
-                            #     "\n" + "="*60 +
-                            #     f"\n📥 [WEB DATA RAW JSON] ID: {command_id}" +
-                            #     f"\n🔹 전체 내용:\n{json.dumps(command_data, indent=2, ensure_ascii=False)}" +
-                            #     "\n" + "="*60
-                            # )
-                            
-                            # raw_route = command_data.get("route", [])  # 웹에서 온 원래 경로 리스트
-                            # processed_route = []                       # 새로 가공해서 담을 빈 리스트
-                            
-                            # for wp in raw_route:
-                            #     processed_route.append(wp)
+                            # 가공 완료된 경로를 필터링 판정용 멤버 변수에 캐싱
+                            self.active_processed_route = processed_route
                             
                             command_data["route"] = processed_route
                             
@@ -188,11 +179,9 @@ class WebBridgeNode(Node):
             goal_state = bt_data.get("status", "idle")
 
         goal_state = str(goal_state).lower()
-
         current_index = int(bt_data.get("current_index", 0))
 
         route_length = bt_data.get("route_length")
-
         if route_length is None:
             route = bt_data.get("route", [])
             if isinstance(route, list):
@@ -232,7 +221,7 @@ class WebBridgeNode(Node):
             bt_data = json.loads(msg.data)
             headers = {"Content-Type": "application/json"}
 
-            # 🛠️ [구조 분류 1] robot_status_state 처리 (1초 주기 데이터)
+            # [구조 분류 1] robot_status_state 처리 (1초 주기 데이터)
             if "robot_status" in bt_data:
                 # 1초 주기로 들어오는 데이터는 상태 중복 체크 없이 '무조건' 전송해야 함
                 
@@ -244,11 +233,22 @@ class WebBridgeNode(Node):
                     self.get_logger().error(f"robot_status_state 전송 실패 (HTTP: {res.status_code})")
                 return
 
-            # 🛠️ [구조 분류 2] navigation_state 처리 (이벤트성 변경 데이터)
+            # [구조 분류 2] navigation_state 처리 (이벤트성 변경 데이터)
             elif "status" in bt_data or "goal_state" in bt_data:
                 web_status = self._convert_bt_goal_state_to_web_status(bt_data)
-                
                 current_index = int(bt_data.get("current_index",0))
+
+                # 7/7 중간 경유지 확인 코드 추가 
+                # 지금 인덱스가 지도 장소 개수보다 작나? - 마지막 경유지는 확인 할 필요 x 
+                if current_index < len(self.active_processed_route):
+                    # 지금 로봇의 위치를 target_wp에 넣음 
+                    target_wp = self.active_processed_route[current_index]
+                    # 만약 is_mid_point가 ture면 return ,값이 없으면 false (기본값)
+                    if target_wp.get("is_mid_point", False):
+                        print("!!!!!!!!!!!!!!!!!중간경유지!!!!!!!!!!!!!!!!")
+                        return
+
+                web_status = self._convert_bt_goal_state_to_web_status(bt_data)
                 
                 navigation_payload = {
                     "status": web_status,
