@@ -223,33 +223,40 @@ class WebBridgeNode(Node):
 
             # [구조 분류 1] robot_status_state 처리 (1초 주기 데이터)
             if "robot_status" in bt_data:
-                # 1초 주기로 들어오는 데이터는 상태 중복 체크 없이 '무조건' 전송해야 함
-                
-                url = f"{self.flask_base_url}/api/robot/status"  # Flask 측 로봇 상태 수신 주소
-                
+                url = f"{self.flask_base_url}/api/robot/status"
                 res = requests.post(url, data=json.dumps(bt_data), headers=headers, timeout=1.0)
-                
                 if res.status_code != 200:
                     self.get_logger().error(f"robot_status_state 전송 실패 (HTTP: {res.status_code})")
                 return
 
-            # [구조 분류 2] 7/7 navigation_state 처리 (이벤트성 변경 데이터)
+            # [구조 분류 2] navigation_state 처리 (이벤트성 변경 데이터)
             elif "status" in bt_data or "goal_state" in bt_data:
-                web_status = self._convert_bt_goal_state_to_web_status(bt_data)
-                current_index = int(bt_data.get("current_index",0))
+                current_index = int(bt_data.get("current_index", 0))
+                goal_state = str(bt_data.get("goal_state", bt_data.get("status", ""))).lower()
 
-                # 7/7 중간 경유지 확인 코드 추가 
-                # 지금 인덱스가 지도 장소 개수보다 작나? - 마지막 경유지는 확인 할 필요 x 
+                # 🛠️ [강력한 중간 경유지 판정 필터]
+                is_mid_point_active = False
+
+                # Case 1: 현재 가리키는 인덱스가 중간 경유지인 경우
                 if current_index < len(self.active_processed_route):
-                    # 지금 로봇의 위치를 target_wp에 넣음 
-                    target_wp = self.active_processed_route[current_index]
-                    # 만약 is_mid_point가 ture면 return ,값이 없으면 false (기본값)
-                    if target_wp.get("is_mid_point", False):
-                        print("!!!!!!!!!!!!!!!!!중간경유지!!!!!!!!!!!!!!!!")
-                        return
+                    if self.active_processed_route[current_index].get("is_mid_point", False):
+                        is_mid_point_active = True
 
+                # Case 2: 로봇이 도착해서 인덱스를 이미 다음 칸으로 올려버린 상태(done)인 경우 (직전 방 검사)
+                if goal_state == "done" and current_index > 0:
+                    prev_index = current_index - 1
+                    if prev_index < len(self.active_processed_route):
+                        if self.active_processed_route[prev_index].get("is_mid_point", False):
+                            is_mid_point_active = True
+
+                # 🎯 변환 함수 호출해서 임시 웹 상태 생성
                 web_status = self._convert_bt_goal_state_to_web_status(bt_data)
-                
+
+                # 🚫 만약 중간 경유지와 조금이라도 얽힌 상태라면, 절대로 finished가 뜨지 못하게 moving으로 강제 고정!
+                if is_mid_point_active:
+                    self.get_logger().info("🚧 [중간경유지 가드 감지] 웹 상태를 moving으로 강제 유지합니다.")
+                    web_status = "moving"
+
                 navigation_payload = {
                     "status": web_status,
                     "current_index": current_index

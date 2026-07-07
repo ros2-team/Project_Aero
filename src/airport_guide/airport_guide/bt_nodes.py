@@ -72,14 +72,19 @@ class ConditionWebPause(BTNode):
 
 class ActionWebPauseStop(BTNode):
     def tick(self, blackboard, ros_node):
+        # 1. 🛠️ 웹 콜백에 의해 플래그가 False(재개)로 바뀌었음을 감지!
+        if not blackboard.is_paused:
+            ros_node.get_logger().info("[RESUME] 일시정지 해제 감지. 주행 상태를 IDLE로 돌려 재출발을 유도합니다.")
+            ros_node.set_goal_state(GoalState.IDLE) # 🔓 자율주행 가드를 열어줌
+            return "SUCCESS" # 🚀 일시정지 방을 당당하게 탈출!
+
+        # 2. 여전히 일시정지 상태(True)일 때만 아래 기존 로직 수행
         ros_node.get_logger().warn("[PAUSE]시스템 일시정지", throttle_duration_sec=3.0)
-        # 실제 물리 제어(Nav2 목표 취소)는 ros_node의 메서드를 호출하여 처리 (로봇 속도 알아서 0으로 떨어짐)
         ros_node.cancel_nav_goal()
 
-        # web_pause 에서 goal_name의 ""를 지우면
         if blackboard.goal_name == "":
             ros_node.set_goal_state(GoalState.IDLE)
-            blackboard.is_paused = False  # 초기화 완료 후 다음 주행을 위해
+            blackboard.is_paused = False  
             return "SUCCESS"
         return "RUNNING"
 
