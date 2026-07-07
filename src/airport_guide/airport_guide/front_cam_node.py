@@ -9,6 +9,7 @@ from ultralytics import YOLO
 import time
 import cv2
 
+
 class FrontCameraNode(Node):
     def __init__(self, blackboard):
         super().__init__('front_camera_node')
@@ -32,6 +33,7 @@ class FrontCameraNode(Node):
             10
         )
 
+
         self.odom_sub = self.create_subscription(
             Odometry,
             '/odom',
@@ -48,6 +50,10 @@ class FrontCameraNode(Node):
     def human_status_cb(self, data):
         self.blackboard.human_far = data.data
 
+
+
+    def human_status_cb(self, data):
+        self.blackboard.human_far = data.data
 
     def odom_callback(self, msg):
         # [FACTS AREA WRITE]
