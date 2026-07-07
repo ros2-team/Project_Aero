@@ -71,7 +71,7 @@ class ArrivalNode(Node):
             elif action_type == "resume_navigation":
                 # 현재 블랙보드에 목적지가 남아있는데 상태가 IDLE(또는 일시정지) 상태라면
                 if self.blackboard.goal_name != "":
-                    self.blackboard.goal_state = GoalState.RUNNING
+                    # self.blackboard.goal_state = GoalState.RUNNING
                     self.get_logger().info(f"▶️ [Arrival Node] 주행 재개 명령 수신 -> FSM 상태를 RUNNING으로 강제 복구합니다.")
         except Exception as e:
             self.get_logger().error(f"❌ [Arrival Node] 웹 명령 파싱 오류: {e}")

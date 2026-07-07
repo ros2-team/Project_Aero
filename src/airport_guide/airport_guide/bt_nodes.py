@@ -105,10 +105,6 @@ class ActionEmergencyStop(BTNode):
         return "RUNNING"
 
 class ActionRecoverFromEmergency(BTNode):
-    # [신규] 위험이 해제된 직후, FSM을 재출발 가능한 상태(IDLE)로 되돌리는 '복구 전용 Action'. 
-    # 상태를 바꾸는 책임을 Condition에서 떼어내 이 노드 하나로 명시적으로 모았다. 
-    # EmergencyBranch가 FAILURE를 반환해서 Root Selector가 다음 형제 브랜치로 넘어가기 전에, 
-    # 이 브랜치가 먼저 복구 여부를 체크하고 지나가도록 EmergencyBranch 안에 배치한다.
     def tick(self, blackboard, ros_node):
         if blackboard.is_dynamic_obstacle:
             return "FAILURE"  # 아직 위험 → 복구할 필요 없음, 이 노드 통과 안 함
