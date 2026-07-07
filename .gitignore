@@ -226,3 +226,9 @@ AMENT_IGNORE
 
 # Web Node.js modules
 web/node_modules/
+
+# IDE 설정 파일 무시
+.vscode/
+
+# AI 모델 가중치 파일 무시
+*.pt

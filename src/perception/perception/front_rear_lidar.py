@@ -88,6 +88,7 @@ class ScanLidar(Node):
         msg.angles = f_angles.tolist()
         msg.distances = f_dists.tolist()   # numpy → list 변환은 여기서만
         self.pub_front.publish(msg)
+        self.get_logger().info(f"잘갔다^^ {min(msg.distances)}")
         
 def main(args=None):
     # 1. ROS2 통신 초기화
