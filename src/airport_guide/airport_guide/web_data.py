@@ -19,7 +19,7 @@ class WebBridgeNode(Node):
         self.last_nav_status = None
         self.web_command_pub = self.create_publisher(String, "/web/command", 10)
 
-        # 현재 주행 중인 보정 경로 데이터를 보존하기 위한 로컬 캐시 추가
+        # 7/7 현재 주행 중인 보정 경로 데이터를 보존하기 위한 로컬 캐시 추가
         self.active_processed_route = []
 
 
@@ -104,15 +104,15 @@ class WebBridgeNode(Node):
                                             "order": current_order,
                                             "location_code": "MID_LEFT",
                                             "location_name": "Corner_Left_Mid",
-                                            "x": -0.43,
-                                            "y": 0.08,
+                                            "x": -0.37,
+                                            "y": -0.08,
                                             "yaw": 0.0,
                                             "is_mid_point": True
                                         }
                                         processed_route.append(left_mid)
                                         self.get_logger().info(f"🔄 [Route Planner] {current_name} ↔ {next_name} (일반구간) -> Left 경유지 무조건 주입")
 
-                            # 가공 완료된 경로를 필터링 판정용 멤버 변수에 캐싱
+                            # 7/7 가공 완료된 경로를 필터링 판정용 멤버 변수에 캐싱
                             self.active_processed_route = processed_route
                             
                             command_data["route"] = processed_route
@@ -233,7 +233,7 @@ class WebBridgeNode(Node):
                     self.get_logger().error(f"robot_status_state 전송 실패 (HTTP: {res.status_code})")
                 return
 
-            # [구조 분류 2] navigation_state 처리 (이벤트성 변경 데이터)
+            # [구조 분류 2] 7/7 navigation_state 처리 (이벤트성 변경 데이터)
             elif "status" in bt_data or "goal_state" in bt_data:
                 web_status = self._convert_bt_goal_state_to_web_status(bt_data)
                 current_index = int(bt_data.get("current_index",0))
