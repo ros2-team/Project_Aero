@@ -211,52 +211,28 @@ class WebBridgeNode(Node):
 
         if bt_data.get("navigation_finished", False):
             return "finished"
-        
         if bt_data.get("is_paused", False):
             return "paused"
 
-        # 권장: 행동트리에서 goal_state로 보내는 경우
-        goal_state = bt_data.get("goal_state")
-
-        # 현재 코드 호환용: 행동트리에서 status로 보내는 경우도 처리
-        if goal_state is None:
-            goal_state = bt_data.get("status", "idle")
-
-        goal_state = str(goal_state).lower()
+        goal_state = str(bt_data.get("goal_state", bt_data.get("status", "idle"))).lower()
         current_index = int(bt_data.get("current_index", 0))
+        
+        # 기본적으로 로컬 캐시 길이를 보되, 비어있다면 BT가 보낸 데이터의 개수나 상수를 대안으로 사용
+        route_length = len(self.active_processed_route)
+        if route_length == 0:
+            # bt_data에 route가 있다면 그것을 쓰고, 그것도 없다면 임시로 현재 인덱스를 기준으로 잡음
+            route_length = len(bt_data.get("route", []))
 
-        route_length = bt_data.get("route_length")
-        if route_length is None:
-            route = bt_data.get("route", [])
-            if isinstance(route, list):
-                route_length = len(route)
-            else:
-                route_length = 0
-
-        route_length = int(route_length)
-
-        if goal_state == "idle":
-            return "idle"
-
-        if goal_state == "sent":
-            return "moving"
-
-        if goal_state == "running":
-            return "moving"
-
-        if goal_state == "canceling":
-            return "stopped"
-
+        if goal_state == "idle": return "idle"
+        if goal_state in ["sent", "running"]: return "moving"
+        if goal_state == "canceling": return "stopped"
         if goal_state == "done":
-            if route_length > 0 and current_index >= route_length:
+            # 🚨 [핵심 방어] 경로 변수가 전부 비어있더라도, BT의 원본 인덱스가 4(최종) 이상이면 무조건 finished 처리
+            if current_index >= 4 or (route_length > 0 and current_index >= route_length):
                 return "finished"
-
             return "moving"
-
-        # 혹시 이미 웹 상태로 들어오는 경우도 허용
         if goal_state in ["moving", "paused", "stopped", "finished"]:
             return goal_state
-
         return "idle"
 
     def _bt_status_callback(self, msg: String):
@@ -301,17 +277,20 @@ class WebBridgeNode(Node):
                     self.get_logger().info("🚧 [중간경유지 가드 감지] 웹 상태를 moving으로 강제 유지합니다.")
                     web_status = "moving"
 
-                web_display_index = 0
-                for i in range(current_index):
-                    # 현재 인덱스(current_index) 이전까지 지나온 경로 중, 중간 경유지가 아닌 '진짜 목적지' 개수만 카운트
-                    if i < len(self.active_processed_route):
-                        if not self.active_processed_route[i].get("is_mid_point", False):
-                            web_display_index += 1
-                            
-                # 🚨 [추가된 핵심 가드] 주행이 완전히 끝났을(finished) 때 누락 방지!
-                if web_status == "finished":
-                    total_real_dest = sum(1 for wp in self.active_processed_route if not wp.get("is_mid_point", False))
-                    web_display_index = total_real_dest
+                # 🛠️ 캐시 리스트가 정상적일 때만 카운트 연산 수행
+                if len(self.active_processed_route) > 0:
+                    web_display_index = 0
+                    for i in range(current_index):
+                        if i < len(self.active_processed_route):
+                            if not self.active_processed_route[i].get("is_mid_point", False):
+                                web_display_index += 1
+                                
+                    if web_status == "finished":
+                        total_real_dest = sum(1 for wp in self.active_processed_route if not wp.get("is_mid_point", False))
+                        web_display_index = total_real_dest
+                else:
+                    # 🚨 [동기화 꼬임 방어] 경로 리스트가 비어있다면 BT 원본 인덱스를 그대로 반영
+                    web_display_index = current_index
 
                 navigation_payload = {
                     "status": web_status,
