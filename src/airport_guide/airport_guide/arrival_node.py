@@ -222,9 +222,9 @@ class ArrivalNode(Node):
         self.get_logger().info(f"🔍 [디버그 주행 중] 목표: {self.blackboard.goal_name}, 남은거리: {distance:.3f}m", throttle_duration_sec=2.0)
         
         if self.is_current_mid_point:
-            arrival_threshold = 0.3
+            arrival_threshold = 1.1
         else:
-            arrival_threshold = 0.4
+            arrival_threshold = 1.1
 
         if distance <= arrival_threshold and not self.local_wait_started:
             if self.is_current_mid_point:

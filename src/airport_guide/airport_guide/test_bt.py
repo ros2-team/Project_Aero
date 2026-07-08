@@ -249,20 +249,45 @@ class AirportGuideBT(Node):
         # [2] navigation_state 발행 (상태 변경 시 발행) - 🎯 원본 웹 인터페이스 규격 복원 및 인덱싱 동기화
         # ---------------------------------------------------------------------
         try:
-            current_nav_status = self.blackboard.goal_state.name.lower() if self.blackboard.goal_state else "idle"
+            # 웹에 보여줄 navigation 상태
+            if getattr(self.blackboard, "navigation_finished", False):
+                current_nav_status = "done"
+            elif getattr(self.blackboard, "goal_name", "") != "":
+                current_nav_status = "moving"
+            else:
+                current_nav_status = "idle"
             current_route = getattr(self.blackboard, "web_route_list", [])
             current_is_paused = getattr(self.blackboard, "is_paused", False)
             current_index = getattr(self.blackboard, "current_waypoint_index", 0) 
             current_goal_name = getattr(self.blackboard, "goal_name", "")
 
-            is_nav_changed = (
-                current_nav_status != self.last_nav_status or
-                current_index != self.last_nav_current_index or
-                current_is_paused != self.last_nav_is_paused or
-                len(current_route) != self.last_nav_route_len
-            )
+            should_publish_navigation = False
 
-            if is_nav_changed:
+            # 최초
+            if self.last_nav_status is None:
+                should_publish_navigation = True
+
+            # ⭐ 가장 중요
+            elif current_index != self.last_nav_current_index:
+                should_publish_navigation = True
+
+            # pause
+            elif current_is_paused != self.last_nav_is_paused:
+                should_publish_navigation = True
+
+            # route 변경
+            elif len(current_route) != self.last_nav_route_len:
+                should_publish_navigation = True
+
+            # 최종 완료만 done 전송
+            elif (
+                current_nav_status == "done"
+                and getattr(self.blackboard, "navigation_finished", False)
+                and self.last_nav_status != "done"
+            ):
+                should_publish_navigation = True
+
+            if should_publish_navigation:
                 # 관제 브릿지 파싱 에러 방지를 위해 원본 스키마("status", "route", "current_target") 엄격 준수
                 navigation_payload = {
                     "status": current_nav_status,

@@ -28,7 +28,6 @@ class WebPauseNode(Node):
             if action_type == "pause_navigation":
                 print("******************토픽 수신 완완완완완완*************************")
                 # [일시정지] 메모리는 유지하되, 트리 진입을 위해 플래그 설정
-                
                 self.blackboard.is_paused = True 
                 self.get_logger().info(" 일시정지 -> blackboard.is_paused = True")
 
