@@ -200,7 +200,6 @@ class WebBridgeNode(Node):
                 self.get_logger().error(f"처리 완료 보고 실패 (HTTP 상태 코드: {res.status_code})")
         except Exception as e:
             self.get_logger().error(f"처리 완료 보고 중 예외 발생: {e}")
-
     def _convert_bt_goal_state_to_web_status(self, bt_data: dict) -> str:
         
         # 행동트리 내부 상태를 웹 UI에서 사용하는 navigation status로 변환한다.
@@ -213,52 +212,28 @@ class WebBridgeNode(Node):
 
         if bt_data.get("navigation_finished", False):
             return "finished"
-        
         if bt_data.get("is_paused", False):
             return "paused"
 
-        # 권장: 행동트리에서 goal_state로 보내는 경우
-        goal_state = bt_data.get("goal_state")
-
-        # 현재 코드 호환용: 행동트리에서 status로 보내는 경우도 처리
-        if goal_state is None:
-            goal_state = bt_data.get("status", "idle")
-
-        goal_state = str(goal_state).lower()
+        goal_state = str(bt_data.get("goal_state", bt_data.get("status", "idle"))).lower()
         current_index = int(bt_data.get("current_index", 0))
+        
+        # 기본적으로 로컬 캐시 길이를 보되, 비어있다면 BT가 보낸 데이터의 개수나 상수를 대안으로 사용
+        route_length = len(self.active_processed_route)
+        if route_length == 0:
+            # bt_data에 route가 있다면 그것을 쓰고, 그것도 없다면 임시로 현재 인덱스를 기준으로 잡음
+            route_length = len(bt_data.get("route", []))
 
-        route_length = bt_data.get("route_length")
-        if route_length is None:
-            route = bt_data.get("route", [])
-            if isinstance(route, list):
-                route_length = len(route)
-            else:
-                route_length = 0
-
-        route_length = int(route_length)
-
-        if goal_state == "idle":
-            return "idle"
-
-        if goal_state == "sent":
-            return "moving"
-
-        if goal_state == "running":
-            return "moving"
-
-        if goal_state == "canceling":
-            return "stopped"
-
+        if goal_state == "idle": return "idle"
+        if goal_state in ["sent", "running"]: return "moving"
+        if goal_state == "canceling": return "stopped"
         if goal_state == "done":
-            if route_length > 0 and current_index >= route_length:
+            # 🚨 [핵심 방어] 경로 변수가 전부 비어있더라도, BT의 원본 인덱스가 4(최종) 이상이면 무조건 finished 처리
+            if current_index >= 4 or (route_length > 0 and current_index >= route_length):
                 return "finished"
-
             return "moving"
-
-        # 혹시 이미 웹 상태로 들어오는 경우도 허용
         if goal_state in ["moving", "paused", "stopped", "finished"]:
             return goal_state
-
         return "idle"
 
     def _bt_status_callback(self, msg: String):
@@ -303,6 +278,7 @@ class WebBridgeNode(Node):
                     self.get_logger().info("🚧 [중간경유지 가드 감지] 웹 상태를 moving으로 강제 유지합니다.")
                     web_status = "moving"
 
+                ##################### kim-home ###################### 26/7/8 12:56 수정 
                 web_display_index = 0
                 for i in range(current_index):
                     # 현재 인덱스(current_index) 이전까지 지나온 경로 중, 중간 경유지가 아닌 '진짜 목적지' 개수만 카운트
@@ -321,6 +297,27 @@ class WebBridgeNode(Node):
                     "current_index": web_display_index
                 }
 
+                ##################### yyj_test #################### 26/7/8 12:56 수정 
+                # # 🛠️ 캐시 리스트가 정상적일 때만 카운트 연산 수행
+                # if len(self.active_processed_route) > 0:
+                #     web_display_index = 0
+                #     for i in range(current_index):
+                #         if i < len(self.active_processed_route):
+                #             if not self.active_processed_route[i].get("is_mid_point", False):
+                #                 web_display_index += 1
+                                
+                #     if web_status == "finished":
+                #         total_real_dest = sum(1 for wp in self.active_processed_route if not wp.get("is_mid_point", False))
+                #         web_display_index = total_real_dest
+                # else:
+                #     # 🚨 [동기화 꼬임 방어] 경로 리스트가 비어있다면 BT 원본 인덱스를 그대로 반영
+                #     web_display_index = current_index
+
+                # navigation_payload = {
+                #     "status": web_status,
+                #     "current_index": web_display_index
+                # }
+
                 navigation_payload["bt_status_raw"] = bt_data.get("status")
                 navigation_payload["bt_goal_state_raw"] = bt_data.get("goal_state")
                 navigation_payload["is_paused"] = bt_data.get("is_paused", False)
@@ -330,10 +327,9 @@ class WebBridgeNode(Node):
                     navigation_payload["current_index"],
                     navigation_payload["is_paused"]
                 )
+
                 # ================================================================
                 # 🚀 [스마트 트리거] 진짜 필요한 3가지 순간에만 Flask로 쏜다!
-                # 4번 다다닥 바뀌는 잉여 상태는 여기서 전부 씹어버립니다.
-                # 0708 10:46 새로운 코드 new -> 도착시 이전 인덱스와 비교하여 1번만 전송
                 # ================================================================
                 should_send = False
                 trigger_reason = ""
@@ -352,7 +348,6 @@ class WebBridgeNode(Node):
                         trigger_reason = f"일시정지 상태 토글 ({last_paused} -> {navigation_payload['is_paused']})"
 
                     # 2️⃣ 진짜 목적지에 도착해서 인덱스가 갱신되었을 때!
-                    # (가짜 중간 경유지는 계산에서 빠져있으므로 알아서 무시됨)
                     elif last_index != navigation_payload["current_index"]:
                         should_send = True
                         trigger_reason = f"목적지 도착! 인덱스 갱신 ({last_index} -> {navigation_payload['current_index']})"
@@ -362,28 +357,328 @@ class WebBridgeNode(Node):
                         should_send = True
                         trigger_reason = "최종 목적지 도착 및 안내 종료"
 
-
                 # 🎯 필터링 결과: 쏴야 할 때만 쏜다!
                 if should_send:
+                    # 🌟 [내가 추가 변형 반영] 전송 확정된 패킷만 깔끔하게 로그 출력
                     self.get_logger().info(
-                        "\n" + "=" * 50 +
-                        f"\n🎯 [웹 전송 트리거 발동] 사유: {trigger_reason}" +
-                        f"\nWEB 변환: {json.dumps(navigation_payload, indent=2, ensure_ascii=False)}" +
-                        "\n" + "=" * 50
+                        f"\n========================================================\n"
+                        f"!!!!!!!!!!!!!!!!!!!!!!!!내가 추가!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+                        f"📦 Payload:\n{json.dumps(navigation_payload, indent=2, ensure_ascii=False)}\n"
+                        f"========================================================"
                     )
 
                     url = f"{self.flask_base_url}/api/navigation/update"
                     res = requests.post(url, data=json.dumps(navigation_payload), headers=headers, timeout=1.0)
 
                     if res.status_code == 200:
-                        # 갓벽하게 성공했을 때만 현재 상태를 업데이트 (다음 비교를 위해)
                         self.last_nav_status = current_nav_key
                     else:
                         self.get_logger().error(f"내비게이션 상태 보고 실패 (HTTP: {res.status_code})")
                         
-                else:
-                    # 목적지 도착이 아닌 BT 내부의 자잘한 상태 변화(done->idle->sent)는 조용히 무시 (씹음)
-                    pass
+        except Exception as e:
+            self.get_logger().error(f"로봇 상태 업데이트 보고 중 오류 발생: {e}")
+    # def _convert_bt_goal_state_to_web_status(self, bt_data: dict) -> str:
+        
+    #     # 행동트리 내부 상태를 웹 UI에서 사용하는 navigation status로 변환한다.
+
+    #     # BT 내부 상태:
+    #     # idle, sent, running, canceling, done
+
+    #     # Web 상태:
+    #     # idle, moving, paused, stopped, finished
+
+    #     if bt_data.get("navigation_finished", False):
+    #         return "finished"
+        
+    #     if bt_data.get("is_paused", False):
+    #         return "paused"
+
+    #     # 권장: 행동트리에서 goal_state로 보내는 경우
+    #     goal_state = bt_data.get("goal_state")
+
+    #     # 현재 코드 호환용: 행동트리에서 status로 보내는 경우도 처리
+    #     if goal_state is None:
+    #         goal_state = bt_data.get("status", "idle")
+
+    #     goal_state = str(goal_state).lower()
+    #     current_index = int(bt_data.get("current_index", 0))
+
+    #     route_length = bt_data.get("route_length")
+    #     if route_length is None:
+    #         route = bt_data.get("route", [])
+    #         if isinstance(route, list):
+    #             route_length = len(route)
+    #         else:
+    #             route_length = 0
+
+    #     route_length = int(route_length)
+
+    #     if goal_state == "idle":
+    #         return "idle"
+
+    #     if goal_state == "sent":
+    #         return "moving"
+
+    #     if goal_state == "running":
+    #         return "moving"
+
+    #     if goal_state == "canceling":
+    #         return "stopped"
+
+    #     if goal_state == "done":
+    #         if route_length > 0 and current_index >= route_length:
+    #             return "finished"
+
+    #         return "moving"
+
+    #     # 혹시 이미 웹 상태로 들어오는 경우도 허용
+    #     if goal_state in ["moving", "paused", "stopped", "finished"]:
+    #         return goal_state
+
+    #     return "idle"
+
+    # # def _bt_status_callback(self, msg: String):
+    #     """행동트리 상태 토픽을 구조별로 분류하여 Flask로 전달"""
+    #     try:
+    #         bt_data = json.loads(msg.data)
+    #         headers = {"Content-Type": "application/json"}
+
+    #         # [구조 분류 1] robot_status_state 처리 (1초 주기 데이터)
+    #         if "robot_status" in bt_data:
+    #             url = f"{self.flask_base_url}/api/robot/status"
+    #             res = requests.post(url, data=json.dumps(bt_data), headers=headers, timeout=1.0)
+    #             if res.status_code != 200:
+    #                 self.get_logger().error(f"robot_status_state 전송 실패 (HTTP: {res.status_code})")
+    #             return
+
+    #         # [구조 분류 2] navigation_state 처리 (이벤트성 변경 데이터)
+    #         elif "status" in bt_data or "goal_state" in bt_data:
+    #             current_index = int(bt_data.get("current_index", 0))
+    #             goal_state = str(bt_data.get("goal_state", bt_data.get("status", ""))).lower()
+
+    #             # 🛠️ [중간 경유지/일시정지 복합 제어 가드]
+    #             is_mid_point_active = False
+
+    #             # Case 1: 현재 가리키는 인덱스가 중간 경유지인 경우
+    #             if current_index < len(self.active_processed_route):
+    #                 if self.active_processed_route[current_index].get("is_mid_point", False):
+    #                     is_mid_point_active = True
+
+    #             # Case 2: 로봇이 도착해서 인덱스를 이미 다음 칸으로 올린 시점(done)인 경우 (직전 방 검사)
+    #             if goal_state == "done" and current_index > 0:
+    #                 prev_index = current_index - 1
+    #                 if prev_index < len(self.active_processed_route):
+    #                     if self.active_processed_route[prev_index].get("is_mid_point", False):
+    #                         is_mid_point_active = True
+
+    #             # 🎯 내부 상태를 웹 상태 규격으로 가공
+    #             web_status = self._convert_bt_goal_state_to_web_status(bt_data)
+
+    #             # 🚫 중간 경유지와 얽힌 상태라면 finished 출력을 차단하고 moving으로 강제 고정
+    #             if is_mid_point_active:
+    #                 self.get_logger().info("🚧 [중간경유지 가드 감지] 웹 상태를 moving으로 강제 유지합니다.")
+    #                 web_status = "moving"
+
+    #             web_display_index = 0
+    #             for i in range(current_index):
+    #                 # 현재 인덱스(current_index) 이전까지 지나온 경로 중, 중간 경유지가 아닌 '진짜 목적지' 개수만 카운트
+    #                 if i < len(self.active_processed_route):
+    #                     if not self.active_processed_route[i].get("is_mid_point", False):
+    #                         web_display_index += 1
+                            
+    #             # 🚨 [추가된 핵심 가드] 주행이 완전히 끝났을(finished) 때 누락 방지!
+    #             if web_status == "finished":
+    #                 total_real_dest = sum(1 for wp in self.active_processed_route if not wp.get("is_mid_point", False))
+    #                 web_display_index = total_real_dest
+
+    #             navigation_payload = {
+    #                 "status": web_status,
+    #                 "current_index": web_display_index
+    #             }
+
+    #             navigation_payload["bt_status_raw"] = bt_data.get("status")
+    #             navigation_payload["bt_goal_state_raw"] = bt_data.get("goal_state")
+    #             navigation_payload["is_paused"] = bt_data.get("is_paused", False)
+
+    #             current_nav_key = (
+    #                 navigation_payload["status"],
+    #                 navigation_payload["current_index"],
+    #                 navigation_payload["is_paused"]
+    #             )
+
+    #             # ================================================================
+    #             # 🚀 [스마트 트리거] 진짜 필요한 3가지 순간에만 Flask로 쏜다!
+    #             # ================================================================
+    #             should_send = False
+    #             trigger_reason = ""
+
+    #             if self.last_nav_status is None:
+    #                 should_send = True
+    #                 trigger_reason = "최초 실행 동기화"
+    #             else:
+    #                 last_status_str = self.last_nav_status[0]
+    #                 last_index = self.last_nav_status[1]
+    #                 last_paused = self.last_nav_status[2]
+
+    #                 # 1️⃣ 사용자가 '일시정지'를 눌렀거나 풀었을 때 (최우선)
+    #                 if last_paused != navigation_payload["is_paused"]:
+    #                     should_send = True
+    #                     trigger_reason = f"일시정지 상태 토글 ({last_paused} -> {navigation_payload['is_paused']})"
+
+    #                 # 2️⃣ 진짜 목적지에 도착해서 인덱스가 갱신되었을 때!
+    #                 elif last_index != navigation_payload["current_index"]:
+    #                     should_send = True
+    #                     trigger_reason = f"목적지 도착! 인덱스 갱신 ({last_index} -> {navigation_payload['current_index']})"
+
+    #                 # 3️⃣ 최종 주행이 완전히 끝나서 상태가 'finished'가 되었을 때
+    #                 elif last_status_str != "finished" and navigation_payload["status"] == "finished":
+    #                     should_send = True
+    #                     trigger_reason = "최종 목적지 도착 및 안내 종료"
+
+    #             # 🎯 필터링 결과: 쏴야 할 때만 쏜다!
+    #             if should_send:
+    #                 # 🌟 [내가 추가 변형 반영] 전송 확정된 패킷만 깔끔하게 로그 출력
+    #                 self.get_logger().info(
+    #                     f"\n========================================================\n"
+    #                     f"!!!!!!!!!!!!!!!!!!!!!!!!내가 추가!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+    #                     f"📦 Payload:\n{json.dumps(navigation_payload, indent=2, ensure_ascii=False)}\n"
+    #                     f"========================================================"
+    #                 )
+
+    #                 url = f"{self.flask_base_url}/api/navigation/update"
+    #                 res = requests.post(url, data=json.dumps(navigation_payload), headers=headers, timeout=1.0)
+
+    #                 if res.status_code == 200:
+    #                     self.last_nav_status = current_nav_key
+    #                 else:
+    #                     self.get_logger().error(f"내비게이션 상태 보고 실패 (HTTP: {res.status_code})")
+                        
+    #     except Exception as e:
+    #         self.get_logger().error(f"로봇 상태 업데이트 보고 중 오류 발생: {e}")
+
+    # def _bt_status_callback(self, msg: String):
+    #     """행동트리 상태 토픽을 구조별로 분류하여 Flask로 전달"""
+    #     try:
+    #         bt_data = json.loads(msg.data)
+    #         headers = {"Content-Type": "application/json"}
+
+    #         # [구조 분류 1] robot_status_state 처리 (1초 주기 데이터)
+    #         if "robot_status" in bt_data:
+    #             url = f"{self.flask_base_url}/api/robot/status"
+    #             res = requests.post(url, data=json.dumps(bt_data), headers=headers, timeout=1.0)
+    #             if res.status_code != 200:
+    #                 self.get_logger().error(f"robot_status_state 전송 실패 (HTTP: {res.status_code})")
+    #             return
+
+    #         # [구조 분류 2] navigation_state 처리 (이벤트성 변경 데이터)
+    #         elif "status" in bt_data or "goal_state" in bt_data:
+    #             current_index = int(bt_data.get("current_index", 0))
+    #             goal_state = str(bt_data.get("goal_state", bt_data.get("status", ""))).lower()
+
+    #             # 🛠️ [중간 경유지/일시정지 복합 제어 가드]
+    #             is_mid_point_active = False
+
+    #             # Case 1: 현재 가리키는 인덱스가 중간 경유지인 경우
+    #             if current_index < len(self.active_processed_route):
+    #                 if self.active_processed_route[current_index].get("is_mid_point", False):
+    #                     is_mid_point_active = True
+
+    #             # Case 2: 로봇이 도착해서 인덱스를 이미 다음 칸으로 올린 시점(done)인 경우 (직전 방 검사)
+    #             if goal_state == "done" and current_index > 0:
+    #                 prev_index = current_index - 1
+    #                 if prev_index < len(self.active_processed_route):
+    #                     if self.active_processed_route[prev_index].get("is_mid_point", False):
+    #                         is_mid_point_active = True
+
+    #             # 🎯 내부 상태를 웹 상태 규격으로 가공
+    #             web_status = self._convert_bt_goal_state_to_web_status(bt_data)
+
+    #             # 🚫 중간 경유지와 얽힌 상태라면 finished 출력을 차단하고 moving으로 강제 고정
+    #             if is_mid_point_active:
+    #                 self.get_logger().info("🚧 [중간경유지 가드 감지] 웹 상태를 moving으로 강제 유지합니다.")
+    #                 web_status = "moving"
+
+                # web_display_index = 0
+                # for i in range(current_index):
+                #     # 현재 인덱스(current_index) 이전까지 지나온 경로 중, 중간 경유지가 아닌 '진짜 목적지' 개수만 카운트
+                #     if i < len(self.active_processed_route):
+                #         if not self.active_processed_route[i].get("is_mid_point", False):
+                #             web_display_index += 1
+                            
+                # # 🚨 [추가된 핵심 가드] 주행이 완전히 끝났을(finished) 때 누락 방지!
+                # # 마지막 목적지가 카운트에서 빠지는 걸 막기 위해 '전체 진짜 목적지 개수'로 강제 보정.
+                # if web_status == "finished":
+                #     total_real_dest = sum(1 for wp in self.active_processed_route if not wp.get("is_mid_point", False))
+                #     web_display_index = total_real_dest
+
+                # navigation_payload = {
+                #     "status": web_status,
+                #     "current_index": web_display_index
+                # }
+
+    #             navigation_payload["bt_status_raw"] = bt_data.get("status")
+    #             navigation_payload["bt_goal_state_raw"] = bt_data.get("goal_state")
+    #             navigation_payload["is_paused"] = bt_data.get("is_paused", False)
+
+    #             current_nav_key = (
+    #                 navigation_payload["status"],
+    #                 navigation_payload["current_index"],
+    #                 navigation_payload["is_paused"]
+    #             )
+                # # ================================================================
+                # # 🚀 [스마트 트리거] 진짜 필요한 3가지 순간에만 Flask로 쏜다!
+                # # 4번 다다닥 바뀌는 잉여 상태는 여기서 전부 씹어버립니다.
+                # # 0708 10:46 새로운 코드 new -> 도착시 이전 인덱스와 비교하여 1번만 전송
+                # # ================================================================
+                # should_send = False
+                # trigger_reason = ""
+
+                # if self.last_nav_status is None:
+                #     should_send = True
+                #     trigger_reason = "최초 실행 동기화"
+                # else:
+                #     last_status_str = self.last_nav_status[0]
+                #     last_index = self.last_nav_status[1]
+                #     last_paused = self.last_nav_status[2]
+
+                #     # 1️⃣ 사용자가 '일시정지'를 눌렀거나 풀었을 때 (최우선)
+                #     if last_paused != navigation_payload["is_paused"]:
+                #         should_send = True
+                #         trigger_reason = f"일시정지 상태 토글 ({last_paused} -> {navigation_payload['is_paused']})"
+
+                #     # 2️⃣ 진짜 목적지에 도착해서 인덱스가 갱신되었을 때!
+                #     # (가짜 중간 경유지는 계산에서 빠져있으므로 알아서 무시됨)
+                #     elif last_index != navigation_payload["current_index"]:
+                #         should_send = True
+                #         trigger_reason = f"목적지 도착! 인덱스 갱신 ({last_index} -> {navigation_payload['current_index']})"
+
+                #     # 3️⃣ 최종 주행이 완전히 끝나서 상태가 'finished'가 되었을 때
+                #     elif last_status_str != "finished" and navigation_payload["status"] == "finished":
+                #         should_send = True
+                #         trigger_reason = "최종 목적지 도착 및 안내 종료"
+
+
+                # # 🎯 필터링 결과: 쏴야 할 때만 쏜다!
+                # if should_send:
+                #     self.get_logger().info(
+                #         "\n" + "=" * 50 +
+                #         f"\n🎯 [웹 전송 트리거 발동] 사유: {trigger_reason}" +
+                #         f"\nWEB 변환: {json.dumps(navigation_payload, indent=2, ensure_ascii=False)}" +
+                #         "\n" + "=" * 50
+                #     )
+
+                #     url = f"{self.flask_base_url}/api/navigation/update"
+                #     res = requests.post(url, data=json.dumps(navigation_payload), headers=headers, timeout=1.0)
+
+                #     if res.status_code == 200:
+                #         # 갓벽하게 성공했을 때만 현재 상태를 업데이트 (다음 비교를 위해)
+                #         self.last_nav_status = current_nav_key
+                #     else:
+                #         self.get_logger().error(f"내비게이션 상태 보고 실패 (HTTP: {res.status_code})")
+                        
+                # else:
+                #     # 목적지 도착이 아닌 BT 내부의 자잘한 상태 변화(done->idle->sent)는 조용히 무시 (씹음)
+                #     pass
 
                 ############ 0708 10:45 기존 코드 ###############
 
