@@ -365,4 +365,9 @@ src/turtlebot3/
 src/turtlebot3_msgs/
 src/turtlebot3_simulations/
 
+
+.vscode/
+**/.vscode/
+
+
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,ros2,python,node
