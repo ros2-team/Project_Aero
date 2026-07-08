@@ -101,8 +101,8 @@ class AirportGuideBT(Node):
         # 최상위 Selector 자식 순서 배치
         self.root.add_child(battery_br)      # 1순위: 배터리 방전 체크 
         self.root.add_child(sensor_br)       # 2순위: 센서 통신 끊김 체크
-        self.root.add_child(emergency_br)    # 3순위: 전방 급정거/복구 체크
         self.root.add_child(pause_br)        # 4순위: 웹 일시정지 체크
+        self.root.add_child(emergency_br)    # 3순위: 전방 급정거/복구 체크
         self.root.add_child(human_hub)       # 5순위: 사람 유실/멀어짐 체크
         self.root.add_child(avoid_br)        # 6순위: 장애물 회피 체크
         self.root.add_child(arrival_br)      # 7순위: 목적지 도착 세션 체크
@@ -249,13 +249,28 @@ class AirportGuideBT(Node):
         # [2] navigation_state 발행 (상태 변경 시 발행) - 🎯 원본 웹 인터페이스 규격 복원 및 인덱싱 동기화
         # ---------------------------------------------------------------------
         try:
+            ######################## 26/7/8 18:04 #######################
+
             # 웹에 보여줄 navigation 상태
             if getattr(self.blackboard, "navigation_finished", False):
                 current_nav_status = "done"
+            # 🛠️ [핵심 수정 3] 목적지가 있더라도 일시정지 플래그가 켜져 있으면 paused를 최우선으로 내보냅니다.
+            elif getattr(self.blackboard, "is_paused", False):
+                current_nav_status = "paused"
             elif getattr(self.blackboard, "goal_name", "") != "":
                 current_nav_status = "moving"
             else:
                 current_nav_status = "idle"
+
+            # ############################# 이전 버전 ##########################
+            # # 웹에 보여줄 navigation 상태
+            # if getattr(self.blackboard, "navigation_finished", False):
+            #     current_nav_status = "done"
+            # elif getattr(self.blackboard, "goal_name", "") != "":
+            #     current_nav_status = "moving"
+            # else:
+            #     current_nav_status = "idle"
+
             current_route = getattr(self.blackboard, "web_route_list", [])
             current_is_paused = getattr(self.blackboard, "is_paused", False)
             current_index = getattr(self.blackboard, "current_waypoint_index", 0) 

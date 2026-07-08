@@ -67,20 +67,12 @@ class ArrivalNode(Node):
             elif action_type == "stop_navigation":
                 self.blackboard.web_action = "stop_navigation"
 
-            # !!!!!!!!!!!!!!7/8!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             # 웹에서 '주행 재개' 버튼을 눌렀을 때 처리 루틴
             elif action_type == "resume_navigation":
-
+                # 현재 블랙보드에 목적지가 남아있는데 상태가 IDLE(또는 일시정지) 상태라면
                 if self.blackboard.goal_name != "":
-                    self.blackboard.goal_state = GoalState.IDLE
-                    self.blackboard.navigation_finished = False
-
-                    self.local_wait_started = False
-                    self.local_wait_start_time = 0.0
-
-                    self.get_logger().info(
-                        "▶️ [Arrival Node] 주행 재개 처리 완료 -> IDLE 상태 복구"
-                    )
+                    # self.blackboard.goal_state = GoalState.RUNNING
+                    self.get_logger().info(f"▶️ [Arrival Node] 주행 재개 명령 수신 -> FSM 상태를 RUNNING으로 강제 복구합니다.")
         except Exception as e:
             self.get_logger().error(f"❌ [Arrival Node] 웹 명령 파싱 오류: {e}")
 
@@ -160,23 +152,8 @@ class ArrivalNode(Node):
             
             self.blackboard.web_action = ""
             return
-        
-        if self.blackboard.goal_state == GoalState.DONE:
-            self.get_logger().warn(
-                f"""
-        🚨 DONE 진입 확인
-        goal_name={self.blackboard.goal_name}
-        current_index={self.blackboard.current_waypoint_index}
-        route_len={len(self.blackboard.web_route_list)}
-        """
-    )
-       
 
-        if (
-            
-            self.blackboard.goal_state == GoalState.DONE
-            and self.blackboard.goal_name != ""
-        ):
+        if self.blackboard.goal_state == GoalState.DONE:
             route = self.blackboard.web_route_list
 
             self.blackboard.current_waypoint_index += 1
@@ -209,20 +186,24 @@ class ArrivalNode(Node):
                     f"(FSM: IDLE)"
                 )
             else:
+                self.blackboard.goal_name = ""
+                self.blackboard.goal_x = 0.0
+                self.blackboard.goal_y = 0.0
 
-                if current_index >= len(route):
+                self.blackboard.current_waypoint_index = len(route)
+                self.blackboard.navigation_active = False
+                self.blackboard.navigation_finished = True
 
-                    self.blackboard.goal_name = ""
-                    self.blackboard.goal_x = 0.0
-                    self.blackboard.goal_y = 0.0
+                self.blackboard.goal_state = GoalState.IDLE
+                self.is_current_mid_point = False
 
-                    self.blackboard.current_waypoint_index = len(route)
-                    self.blackboard.navigation_active = False
-                    self.blackboard.navigation_finished = True
+                self.local_wait_started = False
+                self.local_wait_start_time = 0.0
 
-                    self.get_logger().info(
-                        "🎉 모든 지정 경유지 주행이 최종 완료되었습니다."
-                    )
+                self.get_logger().info(
+                    "🎉 모든 지정 경유지 주행이 최종 완료되었습니다."
+                )
+
             return
 
         # ---------------------------------------------------------------------
@@ -241,9 +222,9 @@ class ArrivalNode(Node):
         self.get_logger().info(f"🔍 [디버그 주행 중] 목표: {self.blackboard.goal_name}, 남은거리: {distance:.3f}m", throttle_duration_sec=2.0)
         
         if self.is_current_mid_point:
-            arrival_threshold = 1.1
+            arrival_threshold = 1.3
         else:
-            arrival_threshold = 1.1
+            arrival_threshold = 1.3
 
         if distance <= arrival_threshold and not self.local_wait_started:
             if self.is_current_mid_point:

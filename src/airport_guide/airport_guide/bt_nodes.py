@@ -94,7 +94,7 @@ class ConditionEmergency(BTNode):
     # 위험 해제 후의 복구(재출발 준비) 로직은 별도 Action 노드로 분리했다.
     # Condition은 상태를 절대 바꾸지 않고 SUCCESS/FAILURE만 보고한다.
     def tick(self, blackboard, ros_node):
-        if blackboard.is_dynamic_obstacle and blackboard.front_obstacle_distance <= 1.2:
+        if blackboard.front_obstacle_distance is not None and blackboard.front_obstacle_distance <= 1.2:
             return "SUCCESS"
         return "FAILURE"
 
@@ -105,12 +105,16 @@ class ActionEmergencyStop(BTNode):
         return "RUNNING"
 
 class ActionRecoverFromEmergency(BTNode):
+    # [신규] 위험이 해제된 직후, FSM을 재출발 가능한 상태(IDLE)로 되돌리는 '복구 전용 Action'. 
+    # 상태를 바꾸는 책임을 Condition에서 떼어내 이 노드 하나로 명시적으로 모았다. 
+    # EmergencyBranch가 FAILURE를 반환해서 Root Selector가 다음 형제 브랜치로 넘어가기 전에, 
+    # 이 브랜치가 먼저 복구 여부를 체크하고 지나가도록 EmergencyBranch 안에 배치한다.
     def tick(self, blackboard, ros_node):
         if blackboard.is_dynamic_obstacle:
             return "FAILURE"  # 아직 위험 → 복구할 필요 없음, 이 노드 통과 안 함
         
         if blackboard.goal_state in [GoalState.CANCELING, GoalState.IDLE] and blackboard.goal_name != "":
-            ros_node.get_logger().info("🏃‍♂️ 전방 장애물 해제. FSM 복구 및 재출발 프로세스 시동.")
+            ros_node.get_logger().info("🏃 전방 장애물 해제. FSM 복구 및 재출발 프로세스 시동.")
             # [핵심] 직접 대입(blackboard.goal_state = ...) 대신 ros_node에 위임.
             # 실제 enum 대입은 test_bt.py의 set_goal_state() 안에서만 일어난다.
             ros_node.set_goal_state(GoalState.IDLE)
@@ -180,18 +184,3 @@ class ActionMoveToGoal(BTNode):
 class ActionIdle(BTNode):
     def tick(self, blackboard, ros_node):
         return "RUNNING"
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
