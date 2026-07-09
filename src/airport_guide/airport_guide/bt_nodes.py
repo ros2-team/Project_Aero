@@ -2,6 +2,7 @@
 import rclpy
 from airport_guide.blackboard import GoalState, ChargingState
 
+
 class BTNode:
     def __init__(self, name):
         self.name = name
@@ -179,6 +180,47 @@ class ActionMoveToGoal(BTNode):
         # Nav2 액션 서버로 목표 전송 (내부적으로 SENT 상태 기록 등 수행)
         ros_node.send_nav_goal(blackboard.goal_x, blackboard.goal_y)
         return "RUNNING"
+
+# qr 
+class ConditionQrAvailable(BTNode):
+    def tick(self, blackboard, ros_node):
+        # 🚨 [가드] 기존 주행 목표가 완벽히 비어있고, 수신된 QR 데이터가 대기 중일 때만 동작
+        has_qr_data = hasattr(blackboard, "qr_route_backup") and blackboard.qr_route_backup
+        if blackboard.goal_name == "" and has_qr_data:
+            return "SUCCESS"
+        
+        # 만약 기존 주행 중인데 QR 데이터가 들어왔다면 무시하고 버립니다. (씹기 로직)
+        if blackboard.goal_name != "" and hasattr(blackboard, "qr_route_backup") and blackboard.qr_route_backup:
+            ros_node.get_logger().warn("⚠️ [QR 씹기] 기존 주행 스케줄이 존재하므로 수신된 QR 요청을 폐기합니다.", throttle_duration_sec=3.0)
+            blackboard.qr_route_backup = None # 데이터 폐기
+            
+        return "FAILURE"
+
+class ActionExecuteQrCall(BTNode):
+    def tick(self, blackboard, ros_node):
+        # 대기 중이던 QR 데이터를 정식 주행 경로로 승격시킵니다.
+        qr_route = blackboard.qr_route_backup
+        blackboard.web_route_list = qr_route
+        blackboard.current_waypoint_index = 0
+        blackboard.navigation_finished = False
+
+        # 웹스키마 규격에 맞춰서 기록 
+        blackboard.web_action = "qr_call_navigation"
+        
+        first_wp = qr_route[0]
+        blackboard.goal_name = first_wp.get("location_name", "QR 목적지")
+        blackboard.goal_x = float(first_wp.get("x", 0.0))
+        blackboard.goal_y = float(first_wp.get("y", 0.0))
+        
+        ros_node.get_logger().info(f"[QR 주행 승인] 로봇 공백 상태 확인. QR 목적지({blackboard.goal_name})로 주행을 시작합니다.")
+        
+        # 상태를 IDLE로 변환하여 다음 순회의 nav_br이 움직이도록 유도
+        ros_node.set_goal_state(GoalState.IDLE)
+        
+        # 처리가 끝난 QR 데이터 변수 초기화
+        blackboard.qr_route_backup = None
+        return "SUCCESS"
+
 
 # 7. 기본 정적 대기 브랜치
 class ActionIdle(BTNode):

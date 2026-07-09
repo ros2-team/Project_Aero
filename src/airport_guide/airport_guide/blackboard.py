@@ -57,3 +57,6 @@ class Blackboard:
         self.current_waypoint_index = 0
         self.navigation_active = False
         self.navigation_finished = False
+
+        #qr 변수 
+        self.qr_route_backup = None

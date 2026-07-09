@@ -25,13 +25,15 @@ from airport_guide.bt_nodes import (
     ConditionHumanFar, ActionSignalToHuman,
     ConditionObstacle, ActionAvoidance,
     ConditionArrived, ActionStopGuide,
-    ConditionHasGoal, ActionMoveToGoal,
+    ConditionHasGoal, ActionMoveToGoal, 
+    ConditionQrAvailable, ActionExecuteQrCall,
     ActionIdle,
 )
 from airport_guide.battery_node import BatteryNode
 from airport_guide.arrival_node import ArrivalNode
 from airport_guide.front_cam_node import FrontCameraNode
 from airport_guide.web_pause import WebPauseNode
+from airport_guide.qr_node import QrCallNode
 
 
 class AirportGuideBT(Node):
@@ -98,6 +100,10 @@ class AirportGuideBT(Node):
         nav_br.add_child(ConditionHasGoal("HasGoal"))
         nav_br.add_child(ActionMoveToGoal("MoveToGoal"))
 
+        qr_br = Sequence("QrBranch")
+        qr_br.add_child(ConditionQrAvailable("QrAvailable"))
+        qr_br.add_child(ActionExecuteQrCall("ExecuteQrCall"))
+
         # 최상위 Selector 자식 순서 배치
         self.root.add_child(battery_br)      # 1순위: 배터리 방전 체크 
         self.root.add_child(sensor_br)       # 2순위: 센서 통신 끊김 체크
@@ -106,7 +112,8 @@ class AirportGuideBT(Node):
         self.root.add_child(human_hub)       # 5순위: 사람 유실/멀어짐 체크
         self.root.add_child(avoid_br)        # 6순위: 장애물 회피 체크
         self.root.add_child(arrival_br)      # 7순위: 목적지 도착 세션 체크
-        self.root.add_child(nav_br)          # 8순위: 모든 예외가 없을 때 자율주행 실행
+        self.root.add_child(nav_br)  
+        self.root.add_child(qr_br)           # 8순위: 모든 예외가 없을 때 자율주행 실행
         self.root.add_child(ActionIdle("SystemIdle")) # 9순위: 정말 아무것도 안 할 때의 대기
 
         self.last_robot_status_pub_time = 0.0
@@ -349,6 +356,7 @@ def main(args=None):
     arrival_node = ArrivalNode(shared_blackboard)
     front_cam_node = FrontCameraNode(shared_blackboard)
     web_pause = WebPauseNode(shared_blackboard)
+    qr_node = QrCallNode(shared_blackboard)
 
     executor = MultiThreadedExecutor()
     executor.add_node(web_bridge_node)
@@ -357,6 +365,7 @@ def main(args=None):
     executor.add_node(arrival_node)
     executor.add_node(front_cam_node)  
     executor.add_node(web_pause) 
+    executor.add_node(qr_node) 
 
     try:
         executor.spin()
@@ -369,6 +378,7 @@ def main(args=None):
         arrival_node.destroy_node()
         front_cam_node.destroy_node()
         web_pause.destroy_node()
+        qr_node.destroy_node()
         rclpy.shutdown()
 
 if __name__ == '__main__':
