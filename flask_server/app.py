@@ -357,7 +357,7 @@ def update_navigation():
                 "message": "현재 안내 경로가 없습니다."
             }), 400
 
-        if current_index < 0 or current_index >= route_length:
+        if current_index < 0:
             return jsonify({
                 "status": "error",
                 "message": "current_index 범위가 올바르지 않습니다."
@@ -445,7 +445,7 @@ def update_navigation_path():
                 "path" : cleaned_segment_path
             })
     navigation_path_state["path"] = cleaned_path
-    navigation_path_state["segment"] = cleaned_segment_path
+    navigation_path_state["segments"] = cleaned_segments
     
     emit_navigation_path()
     
@@ -454,6 +454,13 @@ def update_navigation_path():
         "path_count" : len(cleaned_path),
         "segment_count" : len(cleaned_segments)
     })
+
+# @app.route("/api/navigation/path")
+# def get_navigation_path():
+#     return jsonify({
+#         "status": "success",
+#         "navigation path": navigation_path_state
+#     })
 
 @app.route("/api/qrcall/callrobot", methods = ["POST"])
 def callrobot_qrcall():
