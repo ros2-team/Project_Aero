@@ -25,11 +25,14 @@ class QrCallNode(Node):
             payload = raw_data.get("payload", {})
             new_route = payload.get("route", [])
 
-            # [FACTS AREA WRITE] QR 데이터 수신 시 백업 변수에 안전하게 적재
-            if action_type == "qr_call_navigation" and new_route:
-                # 🚨 기존 경유지(web_route_list)를 건드리지 않고, QR용 독립 변수에 우선 저장합니다.
+            # 🛠️ [수정] Flask의 send_route_to("qrcall", ...) 규격과 매칭
+            if (action_type == "qrcall" or action_type == "qr_call_navigation") and new_route:
+                # 안전한 디버깅 로그 출력
+                self.get_logger().info(f"!!!!!qr 위치 수신 완료: {new_route[0].get('location_name', '알 수 없음')}!!!!!!!")
+                
+                # 기존 경유지를 건드리지 않고 백업 변수에 적재
                 self.blackboard.qr_route_backup = new_route
-                self.get_logger().info("📱 [QR 데이터 수신] 대기열 임시 적재 완료 (주행 완료 후 처리 예정)")
+                self.get_logger().info("[QR 데이터] 대기열 임시 적재 완료 (공백 상태)")
 
         except Exception as e:
-            self.get_logger().error(f" ❌ QR 데이터 수신 중 오류 발생: {e}")
+            self.get_logger().error(f" QR 데이터 수신 중 오류 발생: {e}")

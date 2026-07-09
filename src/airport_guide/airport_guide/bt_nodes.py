@@ -184,40 +184,49 @@ class ActionMoveToGoal(BTNode):
 # qr 
 class ConditionQrAvailable(BTNode):
     def tick(self, blackboard, ros_node):
-        # 🚨 [가드] 기존 주행 목표가 완벽히 비어있고, 수신된 QR 데이터가 대기 중일 때만 동작
+        # [가드] 기존 주행 목표가 완벽히 비어있고, 수신된 QR 데이터가 대기 중일 때만 동작
         has_qr_data = hasattr(blackboard, "qr_route_backup") and blackboard.qr_route_backup
         if blackboard.goal_name == "" and has_qr_data:
             return "SUCCESS"
         
-        # 만약 기존 주행 중인데 QR 데이터가 들어왔다면 무시하고 버립니다. (씹기 로직)
         if blackboard.goal_name != "" and hasattr(blackboard, "qr_route_backup") and blackboard.qr_route_backup:
-            ros_node.get_logger().warn("⚠️ [QR 씹기] 기존 주행 스케줄이 존재하므로 수신된 QR 요청을 폐기합니다.", throttle_duration_sec=3.0)
+            # [로그 보완] 어떤 목적지 데이터가 씹혔는지 명시적으로 출력
+            rejected_target = blackboard.qr_route_backup[0].get("location_name", "알 수 없음")
+            ros_node.get_logger().warn(
+                f"[QR 씹기] 기존 주행 스케줄('{blackboard.goal_name}')이 존재하므로 "
+                f"수신된 QR 요청('{rejected_target}')을 폐기합니다.", 
+                throttle_duration_sec=1.0
+            )
             blackboard.qr_route_backup = None # 데이터 폐기
             
         return "FAILURE"
 
 class ActionExecuteQrCall(BTNode):
     def tick(self, blackboard, ros_node):
-        # 대기 중이던 QR 데이터를 정식 주행 경로로 승격시킵니다.
+        # 대기 중이던 QR 데이터를 정식 주행 경로로 승격
         qr_route = blackboard.qr_route_backup
+        
+        ros_node.get_logger().info(f"bt_node 실행 !!!!!로봇 공백 확인!!!!! 승격 데이터 경로 매핑 시작: {qr_route}")
+        
         blackboard.web_route_list = qr_route
         blackboard.current_waypoint_index = 0
         blackboard.navigation_finished = False
-
-        # 웹스키마 규격에 맞춰서 기록 
+        
+        # 🆕 웹 관제 화면에 현재 상태가 QR 주행 중임을 리포트하기 위해 액션명 동기화
         blackboard.web_action = "qr_call_navigation"
         
+        # Flask에서 정의한 딕셔너리 스키마 구조 추출 ("location_name", "x", "y")
         first_wp = qr_route[0]
         blackboard.goal_name = first_wp.get("location_name", "QR 목적지")
         blackboard.goal_x = float(first_wp.get("x", 0.0))
         blackboard.goal_y = float(first_wp.get("y", 0.0))
         
-        ros_node.get_logger().info(f"[QR 주행 승인] 로봇 공백 상태 확인. QR 목적지({blackboard.goal_name})로 주행을 시작합니다.")
+        ros_node.get_logger().info(f"bt_node 실행 !!!!!로봇 공백 확인!!!!! 타깃 목적지({blackboard.goal_name})로 출발합니다.")
         
-        # 상태를 IDLE로 변환하여 다음 순회의 nav_br이 움직이도록 유도
+        # 상태를 IDLE로 변환하여 다음 틱에서 nav_br(ConditionHasGoal)이 인식하고 움직이도록 유도
         ros_node.set_goal_state(GoalState.IDLE)
         
-        # 처리가 끝난 QR 데이터 변수 초기화
+        # 처리가 완료된 백업 변수 리셋
         blackboard.qr_route_backup = None
         return "SUCCESS"
 

@@ -79,25 +79,34 @@ class WebBridgeNode(Node):
                                     self._mark_command_as_handled(command_id)
                                     self.last_handled_command_id = command_id
                                     continue  # 아래의 경로 덮어쓰기 로직을 건너뛰고 다음 폴링으로!
-                                # ---------------------------------------------------------------------
-                                # 🆕 [QR 호출 명령 분기 추가] 
+                               # ---------------------------------------------------------------------
+                                # 🆕 [QR 호출 명령 분기 수정] Flask 배열 스키마와 완벽 동기화
                                 # ---------------------------------------------------------------------
                                 elif command_type == "qr_call_navigation":
-                                    self.get_logger().info(f"[QR 호출] 목적지: {command_data.get('location_name')}")
+                                    # Flask가 보낸 route 배열에서 첫 번째 목적지 추출
+                                    flask_route = command_data.get("route", [])
                                     
-                                    # QR 데이터 패키징 (Flask에서 넘겨준 타깃 좌표와 정보를 route 리스트로 가공)
-                                    qr_route = [{
-                                        "location_code": command_data.get("location_code"),
-                                        "location_name": command_data.get("location_name"),
-                                        "order": 1,
-                                        "x": float(command_data.get("x", 0.0)),
-                                        "y": float(command_data.get("y", 0.0)),
-                                        "yaw": float(command_data.get("yaw", 0.0)),
-                                        "is_mid_point": False
-                                    }]
-                                    
-                                    # QR 목적지를 원본 route인 것처럼 대입하여 아래의 '중간 경유지 주입' 로직으로 전달
-                                    command_data["route"] = qr_route
+                                    if flask_route:
+                                        qr_wp = flask_route[0]
+                                        self.get_logger().info(f"[QR 호출 감지] 목적지: {qr_wp.get('location_name')}")
+                                        
+                                        # 로봇 행동트리가 최종 인식할 수 있는 내부 규격으로 재가공
+                                        qr_route = [{
+                                            "location_code": qr_wp.get("location_code"),
+                                            "location_name": qr_wp.get("location_name"),
+                                            "order": 1,
+                                            "x": float(qr_wp.get("x", 0.0)),
+                                            "y": float(qr_wp.get("y", 0.0)),
+                                            "yaw": float(qr_wp.get("yaw", 0.0)),
+                                            "is_mid_point": False
+                                        }]
+                                        
+                                        # 가공된 루트를 command_data에 덮어쓰기하여 하부 로직으로 안전하게 전달
+                                        command_data["route"] = qr_route
+                                        command_data["location_name"] = qr_wp.get("location_name")
+                                    else:
+                                        self.get_logger().error("❌ [QR 에러] QR 호출 명령에 route 데이터가 유실되었습니다.")
+                                        continue
 
                             ############## 경로 보정 ###############
                             raw_route = command_data.get("route", [])
