@@ -64,23 +64,23 @@ class SimpleYoloDetector(Node):
                 self.last_bbox_msg.data = [-1.0, -1.0, -1.0]
             
             # ### 시각화 이미지 갱신 -> 프레임 너무 잡아먹음
-            # self.last_annotated_frame = results[0].plot()
+            self.last_annotated_frame = results[0].plot()
 
 
         ### 데이터 송출 (매 프레임 실행)
         self.pub_bbox.publish(self.last_bbox_msg)
 
         ### 결과 이미지 송출 (rqt에서 눈으로 확인하기 위함) -> 이것도 프레임 너무 잡아먹음
-        # img_to_pub = self.last_annotated_frame if self.last_annotated_frame is not None else frame
+        img_to_pub = self.last_annotated_frame if self.last_annotated_frame is not None else frame
 
-        # _, compressed_img = cv2.imencode('.jpg', img_to_pub)
+        _, compressed_img = cv2.imencode('.jpg', img_to_pub)
 
-        # ### 이미지 파일 yolo 토픽으로 publish
-        # msg_out = CompressedImage()
-        # msg_out.header = msg.header ### 타임스탬프는 현재 들어온 이미지의 시간을 그대로 씀
-        # msg_out.format = "jpeg"
-        # msg_out.data = compressed_img.tobytes()
-        # self.pub_result_img.publish(msg_out)
+        ### 이미지 파일 yolo 토픽으로 publish
+        msg_out = CompressedImage()
+        msg_out.header = msg.header ### 타임스탬프는 현재 들어온 이미지의 시간을 그대로 씀
+        msg_out.format = "jpeg"
+        msg_out.data = compressed_img.tobytes()
+        self.pub_result_img.publish(msg_out)
 
 def main(args=None):
     rclpy.init(args=args)

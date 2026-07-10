@@ -19,7 +19,7 @@ class ControlNode(Node):
         ### 라이다 스캔 데이터 구독
         self.scan_sub = self.create_subscription(LidarScanData, '/scan/rear', self.lidar_callback, qos_profile_sensor_data)
 
-        ### cmd_vel 값 publish
+        ## cmd_vel 값 publish
         self.human_status_pub = self.create_publisher(Bool, "/perception/human_far", 10)
 
         ### timer콜백함수 정의
@@ -29,6 +29,11 @@ class ControlNode(Node):
         self.xmax = None
         self.angles = None
         self.distances = None
+
+
+        # 💡 [핵심] 현재 로봇이 정지(대기) 상태인지 기억하는 변수 추가 26/7/9 10:41 안전 로직 추가
+        self.is_waiting = False
+
 
         self.get_logger().info(" 후방 카메라 가동!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     ### 바운딩 박스의 xmin, xmax, center x값 저장
@@ -53,10 +58,19 @@ class ControlNode(Node):
     ### xmin, xmax YOLO 바운딩 박스의 좌우 x좌표 
     ### angles, distances 전처리된 라이다 각도, 거리
     def process_fusion_data(self):
-        ### Bounding Box 좌표를 라이다 각도로 변환
-        ### theta(x) = 0.25 * x + 20
-        angle_min_limit = 0.25 * self.xmin + 20.0
-        angle_max_limit = 0.25 * self.xmax + 20.0
+
+        # 🚨 [추가] YOLO가 대상을 놓쳐서 -1.0 같은 초기값을 보낼 때 방어
+        if self.xmin is None or self.xmin < 0:
+            return None
+
+
+        angle_min_limit = 0.25 * self.xmin + 10.0
+        angle_max_limit = 0.25 * self.xmax + 10.0
+
+        # ### Bounding Box 좌표를 라이다 각도로 변환
+        # ### theta(x) = 0.25 * x + 20
+        # angle_min_limit = 0.25 * self.xmin + 20.0
+        # angle_max_limit = 0.25 * self.xmax + 20.0
 
         ### Numpy 마스킹: 해당 각도 범위 안에 있는 데이터만 True로 필터링
         ### 조건: angle_min_limit <= angles_deg <= angle_max_limit
@@ -90,36 +104,113 @@ class ControlNode(Node):
         ### 예외처리 처음 시작시 데이터가 없을 때
         if (self.xmin is None) or (self.angles is None):
             return
-        min_dist = self.process_fusion_data()
+        self.min_dist = self.process_fusion_data()
         
-        ### 융합된 결과물(min_dist)을 이용해 로봇 제어 명령 퍼블리시
-        if min_dist is not None:
-            if min_dist > 150.0:
-                ### 사용자가 120cm이상 너무 멀어지면
-                self.get_logger().warn(f" 사용자 멀어짐 {min_dist:.1f}cm" )
-
-                self.human_far = True
-                self.publish_human_status(True)
-                # ### 전후진(x)과 회전(z) 속도를 0으로 설정하여 멈춤
-                # self.cmd_pub()
-
+    def timer_callback(self):
+            # 1. 초기 데이터 수신 대기
+            if (self.xmin is None) or (self.angles is None):
+                return
+                
+            self.min_dist = self.process_fusion_data()
+            
+            # 🚨 [핵심 1] 대상 유실 상태 처리 (None일 때)
+            if self.min_dist is None:
+                # 사람이 카메라 밖으로 나갔거나, 라이다 노이즈로 싹 다 날아갔을 때
+                self.is_waiting = True  # 로봇 상태를 강제로 '대기'로 고정
+                self.publish_human_status(True) # 정지 명령 계속 쏨
+                return
+            
+            # 💡 [핵심 2] 질문자님이 구상하신 히스테리시스 로직 적용
+            if not self.is_waiting:
+                # 🏃‍♂️ [현재 추종 중] -> 얼마나 멀어져야 멈출 것인가? (Upper Bound)
+                if self.min_dist > 250.0:
+                    self.is_waiting = True
+                    self.publish_human_status(True)  # 너무 멀어짐 -> 정지
+                else:
+                    self.publish_human_status(False) # 140 이하(예: 138)면 계속 추종
             else:
-                ### 적정 거리 유지 중
-                self.get_logger().info(f" 적정 거리 유지 중 {min_dist:.1f}cm")
-                self.human_far = False
-        else:
-            pass
+                # 🛑 [현재 대기/정지 중] -> 얼마나 가까워져야 다시 출발할 것인가? (Lower Bound)
+                # 140에서 멈췄으니, 라이다가 130 언저리에서 튀더라도 안 속고 버팀
+                if self.min_dist <= 200.0: # 120.0보다 살짝 더 빡빡하게 115.0으로 뒀습니다.
+                    self.is_waiting = False
+                    self.publish_human_status(False) # 확실히 다가옴 -> 재출발
+                else:
+                    self.publish_human_status(True)  # 115 초과(예: 125)면 아직 어중간하므로 대기 유지
+
+            # # 💡 [핵심 2] 질문자님이 구상하신 히스테리시스 로직 적용
+            # if not self.is_waiting:
+            #     # 🏃‍♂️ [현재 추종 중] -> 얼마나 멀어져야 멈출 것인가? (Upper Bound)
+            #     if self.min_dist > 140.0:
+            #         self.is_waiting = True
+            #         self.publish_human_status(True)  # 너무 멀어짐 -> 정지
+            #     else:
+            #         self.publish_human_status(False) # 140 이하(예: 138)면 계속 추종
+            # else:
+            #     # 🛑 [현재 대기/정지 중] -> 얼마나 가까워져야 다시 출발할 것인가? (Lower Bound)
+            #     # 140에서 멈췄으니, 라이다가 130 언저리에서 튀더라도 안 속고 버팀
+            #     if self.min_dist <= 115.0: # 120.0보다 살짝 더 빡빡하게 115.0으로 뒀습니다.
+            #         self.is_waiting = False
+            #         self.publish_human_status(False) # 확실히 다가옴 -> 재출발
+            #     else:
+            #         self.publish_human_status(True)  # 115 초과(예: 125)면 아직 어중간하므로 대기 유지
+
+        # ######################## 26/7/9 10:42 안전장치 추가 ###################
+        # if self.min_dist is not None:
+        #     # 💡 [히스테리시스 로직 적용]
+        #     if not self.is_waiting:
+        #         # 1. 현재 로봇이 [추종 중]일 때: 150cm를 넘어가야만 멈춤
+        #         if self.min_dist > 140.0:
+        #             self.is_waiting = True
+        #             self.publish_human_status(True)  # 사람 멀어짐 플래그 ON -> BT에서 정지
+        #         else:
+        #             # 150cm 이하(예: 145cm)라면 무시하고 계속 추종
+        #             self.publish_human_status(False) 
+        #     else:
+        #         # 2. 현재 로봇이 [대기 중]일 때: 130cm 이하로 확실히 다가와야 다시 출발
+        #         if self.min_dist <= 120.0:
+        #             self.is_waiting = False
+        #             self.publish_human_status(False) # 사람 멀어짐 플래그 OFF -> BT에서 재출발
+        #         else:
+        #             # 130cm 초과(예: 145cm)라면 아직 어중간하므로 계속 대기 유지
+        #             self.publish_human_status(True)
+
+
+        # # ### 융합된 결과물(min_dist)을 이용해 로봇 제어 명령 퍼블리시
+        # if self.min_dist is not None:
+        #     if self.min_dist > 140.0:
+        #         ### 사용자가 120cm이상 너무 멀어지면
+        #         # self.get_logger().warn(f" 사용자 멀어짐 {min_dist:.1f}cm" )
+        #         self.publish_human_status(True)
+        #         # ### 전후진(x)과 회전(z) 속도를 0으로 설정하여 멈춤
+        #         # self.cmd_pub()
+
+        #     else:
+        #         ### 적정 거리 유지 중
+        #         # self.get_logger().info(f" 적정 거리 유지 중 {min_dist:.1f}cm")
+        #         self.publish_human_status(False)
+        # else:
+        #     self.publish_human_status(True)
 
     def publish_human_status(self, is_far: bool):
         msg = Bool()
         msg.data = is_far
         self.human_status_pub.publish(msg)
         
-        # 값이 잘 날아가는지 터미널에서 확인하기 위한 로그
-        if is_far:
-            self.get_logger().info("📤 [Pub] human_lost 토픽 발행: True (정지 요청)")
+        ###################### 26/7/10 09:23 추가 #########################
+        if self.min_dist is not None:
+            dist_str = f"{self.min_dist:.1f}cm"
         else:
-            self.get_logger().info("📤 [Pub] human_lost 토픽 발행: False (추종 계속)")
+            dist_str = "측정 불가 (대상 유실)"
+            
+        if is_far:
+            self.get_logger().info(f"📤 [Pub] human_lost 토픽 발행: True (정지 요청) 거리 : {dist_str}")
+        else:
+            self.get_logger().info(f"📤 [Pub] human_lost 토픽 발행: False (추종 계속) 거리 : {dist_str}")
+
+        # if is_far:
+        #     self.get_logger().info(f"📤 [Pub] human_lost 토픽 발행: True (정지 요청) 거리 : {self.min_dist:.1f}")
+        # else:
+        #     self.get_logger().info(f"📤 [Pub] human_lost 토픽 발행: False (추종 계속) 거리 : {self.min_dist:.1f}")
 
 
 def main(args=None):

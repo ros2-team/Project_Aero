@@ -36,7 +36,7 @@ class ScanLidar(Node):
 
         # 2. 거리 필터 마스크 (nan/inf 동시 처리)
         ### 이건 아래 조건에 따라 True 혹은 False를 반환함
-        valid = (dist_cm > 0.0) & (dist_cm <= 200.0)
+        valid = (dist_cm > 0.0) & (dist_cm <= 500.0)
 
         # 3. 전방/후방 마스크
         ### 전 후방 조건 다르게 하여 저장

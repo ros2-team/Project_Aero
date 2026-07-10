@@ -41,7 +41,7 @@ class ArrivalNode(Node):
             action_type = raw_data.get("action")  # web_bridge가 보낸 규격 매칭
             payload = raw_data.get("payload", {})   # raw_data.get("payload")로 이 덩어리를 가져옴
             route = payload.get("route", []) # 실제 루트 꺼내옴
-            self.get_logger().info(f"이것이 제가 전송 받은 route들 입니다 !!!!!!!!!!!!!!!!!!!!!!!!! {route}")
+            
             if action_type == "navigation_route":   # 안내시작 누르면 실행 됨
             
                 self.blackboard.web_route_list = route
@@ -71,7 +71,7 @@ class ArrivalNode(Node):
             elif action_type == "resume_navigation":
                 # 현재 블랙보드에 목적지가 남아있는데 상태가 IDLE(또는 일시정지) 상태라면
                 if self.blackboard.goal_name != "":
-                    self.blackboard.goal_state = GoalState.RUNNING
+                    # self.blackboard.goal_state = GoalState.RUNNING
                     self.get_logger().info(f"▶️ [Arrival Node] 주행 재개 명령 수신 -> FSM 상태를 RUNNING으로 강제 복구합니다.")
         except Exception as e:
             self.get_logger().error(f"❌ [Arrival Node] 웹 명령 파싱 오류: {e}")
@@ -152,6 +152,7 @@ class ArrivalNode(Node):
             
             self.blackboard.web_action = ""
             return
+
         if self.blackboard.goal_state == GoalState.DONE:
             route = self.blackboard.web_route_list
 
@@ -221,9 +222,9 @@ class ArrivalNode(Node):
         self.get_logger().info(f"🔍 [디버그 주행 중] 목표: {self.blackboard.goal_name}, 남은거리: {distance:.3f}m", throttle_duration_sec=2.0)
         
         if self.is_current_mid_point:
-            arrival_threshold = 0.3
+            arrival_threshold = 0.5
         else:
-            arrival_threshold = 0.4
+            arrival_threshold = 0.5
 
         if distance <= arrival_threshold and not self.local_wait_started:
             if self.is_current_mid_point:
@@ -237,7 +238,7 @@ class ArrivalNode(Node):
         if self.local_wait_started:
             elapsed = time.time() - self.local_wait_start_time
             self.get_logger().info(f"📍 [{self.blackboard.goal_name} 대기 중] 경과 시간: {elapsed:.1f}초", throttle_duration_sec=1.0)
-            if elapsed >= 5.0:
+            if elapsed >= 2.0:
                 self.get_logger().info(f"✅ [{self.blackboard.goal_name}] 안내 세션 종료. FSM 상태를 DONE으로 전이합니다.")
                 self.blackboard.goal_state = GoalState.DONE
                 self.local_wait_started = False
