@@ -20,13 +20,13 @@ from airport_guide.bt_nodes import (
     ConditionSensorTimeout, ActionSensorEmergencyStop,
     ConditionWebPause, ActionWebPauseStop,
     ConditionEmergency, ActionEmergencyStop,
-    ActionRecoverFromEmergency,
-    ConditionHumanLost, ActionSearchHuman,
+    ActionGlobalRecovery,
+    # ConditionHumanLost, ActionSearchHuman,
     ConditionHumanFar, ActionSignalToHuman,
-    ConditionObstacle, ActionAvoidance,
+    # ConditionObstacle, ActionAvoidance,
     ConditionArrived, ActionStopGuide,
-    ConditionHasGoal, ActionMoveToGoal, 
-    ConditionQrAvailable, ActionExecuteQrCall,
+    ConditionHasGoal, ActionMoveToGoal,
+    ConditionQrAvailable, ActionExecuteQrCall, # qr
     ActionIdle,
 )
 from airport_guide.battery_node import BatteryNode
@@ -70,31 +70,35 @@ class AirportGuideBT(Node):
         pause_br = Sequence("WebPauseBranch")
         pause_br.add_child(ConditionWebPause("WebPause"))
         pause_br.add_child(ActionWebPauseStop("WebPauseStop"))
-
-        emergency_br = Selector("EmergencyBranch")
+        ################### 26/7/9 12:55 주석처리 ###################
+        # emergency_br = Selector("EmergencyBranch")
         stop_seq = Sequence("EmergencyStopSeq")
         stop_seq.add_child(ConditionEmergency("Emergency"))
         stop_seq.add_child(ActionEmergencyStop("Stop"))
-        emergency_br.add_child(stop_seq)
-        emergency_br.add_child(ActionRecoverFromEmergency("Recover"))
+        # emergency_br.add_child(stop_seq)
+        # emergency_br.add_child(ActionRecoverFromEmergency("Recover"))
 
-        human_hub = Selector("HumanControlHub")
-        lost_seq = Sequence("HumanLostSeq")
-        lost_seq.add_child(ConditionHumanLost("HumanLost"))
-        lost_seq.add_child(ActionSearchHuman("SearchHuman"))
+        ########################## 26/7/9 14:32 주석 처리 #########################
+        # human_hub = Selector("HumanControlHub")
+        # lost_seq = Sequence("HumanLostSeq")
+        # lost_seq.add_child(ConditionHumanLost("HumanLost"))
+        # lost_seq.add_child(ActionSearchHuman("SearchHuman"))
         far_seq = Sequence("HumanFarSeq")
         far_seq.add_child(ConditionHumanFar("HumanFar"))
         far_seq.add_child(ActionSignalToHuman("SignalToHuman"))
-        human_hub.add_child(lost_seq)
-        human_hub.add_child(far_seq)
-
-        avoid_br = Sequence("AvoidanceBranch")
-        avoid_br.add_child(ConditionObstacle("Obstacle"))
-        avoid_br.add_child(ActionAvoidance("Avoid"))
+        # human_hub.add_child(lost_seq)
+        # human_hub.add_child(far_seq)
+        # avoid_br = Sequence("AvoidanceBranch")
+        # avoid_br.add_child(ConditionObstacle("Obstacle"))
+        # avoid_br.add_child(ActionAvoidance("Avoid"))
 
         arrival_br = Sequence("ArrivalBranch")
         arrival_br.add_child(ConditionArrived("Arrived"))
         arrival_br.add_child(ActionStopGuide("StopGuide"))
+
+        # ⭐ [신규 추가] 7.5순위: 글로벌 복구 (위의 4, 5, 6순위 태클을 모두 피해서 여기까지 내려왔다면?)
+        # 여기서 CANCELING 족쇄를 풀고 IDLE로 만들어 줍니다.
+        recovery_br = ActionGlobalRecovery("GlobalRecovery")
 
         nav_br = Sequence("NavigationBranch")
         nav_br.add_child(ConditionHasGoal("HasGoal"))
@@ -108,12 +112,17 @@ class AirportGuideBT(Node):
         self.root.add_child(battery_br)      # 1순위: 배터리 방전 체크 
         self.root.add_child(sensor_br)       # 2순위: 센서 통신 끊김 체크
         self.root.add_child(pause_br)        # 4순위: 웹 일시정지 체크
-        self.root.add_child(emergency_br)    # 3순위: 전방 급정거/복구 체크
-        self.root.add_child(human_hub)       # 5순위: 사람 유실/멀어짐 체크
-        self.root.add_child(avoid_br)        # 6순위: 장애물 회피 체크
+
+        ################### 26/7/9 12:55 주석처리 ###################
+        # self.root.add_child(emergency_br)    # 3순위: 전방 급정거/복구 체크
+        ########################## 26/7/9 14:32 주석 처리 #########################
+        # self.root.add_child(human_hub)       # 5순위: 사람 유실/멀어짐 체크
+        # self.root.add_child(avoid_br)        # 6순위: 장애물 회피 체크
+        self.root.add_child(far_seq)       # 5순위: 사람 유실/멀어짐 체크
         self.root.add_child(arrival_br)      # 7순위: 목적지 도착 세션 체크
-        self.root.add_child(nav_br)  
-        self.root.add_child(qr_br)           # 8순위: 모든 예외가 없을 때 자율주행 실행
+        self.root.add_child(recovery_br)     # ⭐ 7.5. 다 뚫었어? 그럼 멈춰있던 거 풀어줄게! (출발 준비)
+        self.root.add_child(nav_br)   
+        self.root.add_child(qr_br)           # 8순위: 모든 예외가 없을 때 자율주행 실행       # 8순위: 모든 예외가 없을 때 자율주행 실행
         self.root.add_child(ActionIdle("SystemIdle")) # 9순위: 정말 아무것도 안 할 때의 대기
 
         self.last_robot_status_pub_time = 0.0
@@ -197,6 +206,11 @@ class AirportGuideBT(Node):
                 # Nav2 물리 도달 성공 시 DONE으로 바로 밀지 않습니다.
                 # ArrivalNode가 남은 거리 계측 및 5초 대기를 보장할 수 있도록 로그만 출력하고 상태 제어권을 양보합니다.
                 self.get_logger().info(f"🏁 [Nav2 도착 성공] 하부 주행 도달 완료. ArrivalNode의 정밀 도달/대기 판정을 기다립니다.")
+
+                ##################### 7/9 11:53 수정 #########################
+                self.set_goal_state(GoalState.DONE)
+                
+                ###################### 이전 버전 ######################
                 # self.set_goal_state(GoalState.DONE)
             else:
                 # 실패나 취소 시에만 복구 동작 유도를 위해 IDLE 전이
@@ -206,6 +220,7 @@ class AirportGuideBT(Node):
         except Exception as e:
             self.get_logger().error(f"결과 상태 파싱 중 치명적 예외 발생: {e}")
             self.set_goal_state(GoalState.IDLE)
+
         finally:
             # 주행 완료 혹은 오판 무시 시점 이후, 
             # 인스턴스 전용 핸들링 포인터를 리셋하여 메모리를 클리어합니다.
