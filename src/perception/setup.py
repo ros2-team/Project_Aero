@@ -31,6 +31,7 @@ setup(
         'hsv_tracker = perception.hsv_tracker:main',
         'rearcam_ctrl = perception.rearcam_ctrl:main',
         'rearcam = perception.rearcam:main',
+        'docking_node = perception.docking_node:main',
         ],
     },
 )
