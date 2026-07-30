@@ -30,8 +30,6 @@ class ControlNode(Node):
         self.angles = None
         self.distances = None
 
-        self.get_logger().info(" 후방 카메라 가동!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        
     ### 바운딩 박스의 xmin, xmax, center x값 저장
     def box_callback(self, data):
         if data is None:
@@ -39,15 +37,12 @@ class ControlNode(Node):
         self.xmin = data.data[0]
         cx = data.data[1]
         self.xmax = data.data[2]
-        
-        # print(f"x min값: {self.xmin:.1f}, x max값: {self.xmax:.1f}")
 
     ### 라이다 각도와 거리 데이터 저장
     def lidar_callback(self, data):
         if data is not None:
             self.angles = np.array(data.angles)
             self.distances = np.array(data.distances)
-            # print(f"각도: {angles}, 거리: {distances}")
         else:
             pass
 
@@ -78,37 +73,31 @@ class ControlNode(Node):
             min_idx = np.argmin(target_distances)
             min_angle_deg = target_angles[min_idx]
             
-            # print(f"[장애물 감지] 픽셀({self.xmin}~{self.xmax}) -> 각도({angle_min_limit:.1f}°~{angle_max_limit:.1f}°) 영역")
-            # print(f"   가장 가까운 장애물: {min_distance_cm:.1f}cm (위치: {min_angle_deg:.1f}°)")
-            
             return min_distance_cm
         else:
             ### Bounding Box 영역 안에 있긴 하지만, 거리가 200cm 밖이라 
             ### 전처리 과정에서 날아갔거나 아예 텅 빈 허공인 경우
-            # print(f" [안전] 각도({angle_min_limit:.1f}°~{angle_max_limit:.1f}°) 영역 내 200cm 이하 장애물 없음")
-            
             return None ### 혹은 안전을 뜻하는 기본값 반환 (예: 200.0)
         
     def timer_callback(self):
+        
         ### 예외처리 처음 시작시 데이터가 없을 때
         if (self.xmin is None) or (self.angles is None):
             return
+        
         min_dist = self.process_fusion_data()
         
         ### 융합된 결과물(min_dist)을 이용해 로봇 제어 명령 퍼블리시
         if min_dist is not None:
-            if min_dist > 150.0:
-                ### 사용자가 120cm이상 너무 멀어지면
-                self.get_logger().warn(f" 사용자 멀어짐 {min_dist:.1f}cm" )
 
+            if min_dist > 150.0:
+
+                ### 사용자가 120cm이상 너무 멀어지면
                 self.human_far = True
                 self.publish_human_status(True)
-                # ### 전후진(x)과 회전(z) 속도를 0으로 설정하여 멈춤
-                # self.cmd_pub()
 
             else:
                 ### 적정 거리 유지 중
-                self.get_logger().info(f" 적정 거리 유지 중 {min_dist:.1f}cm")
                 self.human_far = False
         else:
             pass
@@ -117,13 +106,6 @@ class ControlNode(Node):
         msg = Bool()
         msg.data = is_far
         self.human_status_pub.publish(msg)
-        
-        # 값이 잘 날아가는지 터미널에서 확인하기 위한 로그
-        if is_far:
-            self.get_logger().info("📤 [Pub] human_lost 토픽 발행: True (정지 요청)")
-        else:
-            self.get_logger().info("📤 [Pub] human_lost 토픽 발행: False (추종 계속)")
-
 
 def main(args=None):
     rclpy.init(args=args)

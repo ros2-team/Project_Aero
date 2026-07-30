@@ -17,9 +17,6 @@ class SimpleYoloDetector(Node):
         ### 발행(Pub): X좌표 3개(xmin, center_x, xmax)를 보낼 토픽
         self.pub_bbox = self.create_publisher(Float32MultiArray, '/target/bounding_box_x', 10)
         
-        ### 퍼포먼스 확인을 위한 결과 이미지 발행 (옵션)
-        # self.pub_result_img = self.create_publisher(CompressedImage, '/cam_rear/yolo/compressed', 10)
-        
         ### YOLOv8 Nano 모델 로드 (가장 가벼운 모델)
         self.yolo = YOLO('yolov8n.pt')
 
@@ -58,13 +55,9 @@ class SimpleYoloDetector(Node):
                 
                 ### 새로운 데이터를 구했으니 갱신
                 self.last_bbox_msg.data = [xmin, center_x, xmax]
-                # self.get_logger().info(f"현재 센터 값 x: {center_x:.1f}")
 
             else:
                 self.last_bbox_msg.data = [-1.0, -1.0, -1.0]
-            
-            # ### 시각화 이미지 갱신 -> 프레임 너무 잡아먹음
-            # self.last_annotated_frame = results[0].plot()
 
         ### 데이터 송출 (매 프레임 실행)
         self.pub_bbox.publish(self.last_bbox_msg)

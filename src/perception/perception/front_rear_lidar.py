@@ -61,17 +61,6 @@ class ScanLidar(Node):
         r_idx    = np.argsort(r_angles)
         r_angles, r_dists = r_angles[r_idx], r_dists[r_idx]
 
-        # 6. 퍼블리시 or 로그 출력
-        # if len(f_angles):
-        #     out = ", ".join([f"[{a:.1f}°:{d:.1f}cm]"
-        #                     for a, d in zip(f_angles, f_dists)])
-        #     self.get_logger().info(f"전방 감지 ({len(f_angles)}개): {out}")
-
-        # if len(r_angles):
-        #     out = ", ".join([f"[{a:.1f}°:{d:.1f}cm]"
-        #                     for a, d in zip(r_angles, r_dists)])
-        #     self.get_logger().info(f"후방 감지 ({len(r_angles)}개): {out}")
-
         self.front_pub(f_angles, f_dists)
         self.rear_pub(r_angles, r_dists)
 
@@ -88,7 +77,6 @@ class ScanLidar(Node):
         msg.angles = f_angles.tolist()
         msg.distances = f_dists.tolist()   # numpy → list 변환은 여기서만
         self.pub_front.publish(msg)
-        self.get_logger().info(f"잘갔다^^ {min(msg.distances)}")
         
 def main(args=None):
     # 1. ROS2 통신 초기화
@@ -103,7 +91,7 @@ def main(args=None):
 
     except KeyboardInterrupt:
         # Ctrl+C 등으로 종료 요청이 들어왔을 때의 예외 처리
-        sl.get_logger().info("사용자에 의해 노드가 종료됩니다.")
+        pass
 
     finally:
         # 4. 자원 해제 및 ROS2 종료
