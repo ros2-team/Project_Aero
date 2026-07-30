@@ -14,14 +14,9 @@ class ArrivalNode(Node):
     def __init__(self, blackboard):
         super().__init__('arrezzival_node')
         self.blackboard = blackboard
-        # self.odom_sub = self.create_subscription(
-        #     Odometry,
-        #     '/odom',
-        #     self.odom_callback,
-        #     qos_profile_sensor_data
-        # )
 
         self.amcl_sub = self.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self.pose_callback, 10)
+        
         # WebBridgeNode가 발행하는 웹 명령 토픽 직접 구독 추가
         self.command_sub = self.create_subscription(
             String,
@@ -75,12 +70,6 @@ class ArrivalNode(Node):
                     self.get_logger().info(f"▶️ [Arrival Node] 주행 재개 명령 수신 -> FSM 상태를 RUNNING으로 강제 복구합니다.")
         except Exception as e:
             self.get_logger().error(f"❌ [Arrival Node] 웹 명령 파싱 오류: {e}")
-
-    # def odom_callback(self, msg):
-        # self.blackboard.current_x = msg.pose.pose.position.x
-        # self.blackboard.current_y = msg.pose.pose.position.y
-        # self.blackboard.last_sensor_time = time.time()
-        # self.blackboard.sensor_timeout = False
 
     def pose_callback(self, msg):
         self.blackboard.current_x = msg.pose.pose.position.x
