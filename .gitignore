@@ -222,6 +222,14 @@ AMENT_IGNORE
 .history
 .ionide
 
+# VSCode
+.vscode/
+
+# External Packages
+src/DynamixelSDK/
+src/turtlebot3/
+src/turtlebot3_msgs/
+
 # End of https://www.toptal.com/developers/gitignore/api/ros2,visualstudiocode,python
 
 # Web Node.js modules
