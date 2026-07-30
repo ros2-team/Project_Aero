@@ -60,10 +60,6 @@ class WebBridgeNode(Node):
                                 f"\n🔹 전체 내용:\n{json.dumps(command_data, indent=2, ensure_ascii=False)}" +
                                 "\n" + "="*60
                             )
-                            
-                            ############################ 이게 이전 버전 #########################
-                            if has_command and not is_handled and (command_id != self.last_handled_command_id):
-                                self.get_logger().info(f"[새 명령 감지] ID: {command_id}, Type: {command_data.get('type')}")
                                 
                             ######################## 경로 보정 최신화 26/7/8 18:02 ###########################
                             if has_command and not is_handled and (command_id != self.last_handled_command_id):
