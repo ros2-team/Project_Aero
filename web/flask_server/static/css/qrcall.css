@@ -1,0 +1,377 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    overflow: hidden;
+    font-family: Arial, "Noto Sans KR", sans-serif;
+}
+
+.qrcall-page {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: #f8fbff;
+}
+
+/* 배경 이미지 */
+.background-layer {
+    position: absolute;
+    inset: 0;
+
+    background-image: url("../img/ui/background.png");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+
+    z-index: 0;
+}
+
+/* 밝은 흰색 오버레이 */
+.white-layer {
+    position: absolute;
+    inset: 0;
+
+    background:
+        linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.97) 0%,
+            rgba(255, 255, 255, 0.94) 48%,
+            rgba(247, 251, 255, 0.90) 100%
+        );
+
+    z-index: 1;
+}
+
+/* 상단 헤더 */
+.qrcall-header {
+    position: relative;
+    z-index: 2;
+
+    height: 92px;
+    padding: 0 42px;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    border-bottom: 1px solid rgba(210, 224, 246, 0.85);
+}
+
+.logo-image {
+    width: 300px;
+    height: auto;
+    object-fit: contain;
+    display: block;
+}
+
+.header-space {
+    width: 120px;
+    height: 1px;
+}
+
+/* 본문 전체 */
+.qrcall-content {
+    position: relative;
+    z-index: 2;
+
+    height: calc(100vh - 92px);
+    padding: 38px 70px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 좌우 병렬 레이아웃 */
+.qrcall-layout {
+    width: 100%;
+    max-width: 1180px;
+
+    display: grid;
+    grid-template-columns: 1fr 0.95fr;
+    align-items: center;
+    gap: 54px;
+}
+
+/* 왼쪽 영역 */
+.qrcall-left {
+    text-align: center;
+}
+
+.qrcall-left h1 {
+    margin: 0;
+
+    color: #061b4e;
+    font-size: 42px;
+    font-weight: 900;
+    letter-spacing: -1.2px;
+}
+
+.qrcall-left > p {
+    margin: 20px 0 18px;
+
+    color: #162957;
+    font-size: 22px;
+    line-height: 1.7;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+/* 로봇 영역 */
+.call-robot-area {
+    position: relative;
+
+    width: 390px;
+    height: 350px;
+    margin: 0 auto;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.robot-circle {
+    position: absolute;
+    z-index: 1;
+
+    width: 270px;
+    height: 270px;
+    border-radius: 50%;
+
+    background: rgba(7, 93, 232, 0.10);
+}
+
+.call-robot-image {
+    position: relative;
+    z-index: 2;
+
+    width: 300px;
+    height: auto;
+    object-fit: contain;
+
+    filter: drop-shadow(0 16px 24px rgba(6, 27, 78, 0.12));
+}
+
+.question-mark {
+    position: absolute;
+    z-index: 3;
+
+    left: 28px;
+    top: 34px;
+
+    color: #0875ff;
+    font-size: 76px;
+    font-weight: 900;
+
+    text-shadow: 0 8px 18px rgba(7, 93, 232, 0.18);
+}
+
+/* 오른쪽 영역 */
+.qrcall-right {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+/* 호출 카드 */
+.call-card {
+    width: 100%;
+    padding: 26px;
+
+    border-radius: 18px;
+    border: 1px solid rgba(210, 224, 246, 0.95);
+    background: rgba(255, 255, 255, 0.96);
+
+    box-shadow: 0 14px 32px rgba(6, 27, 78, 0.08);
+
+    text-align: left;
+}
+
+.location-label {
+    margin-bottom: 12px;
+
+    color: #2f3b52;
+    font-size: 16px;
+    font-weight: 900;
+}
+
+.location-select {
+    height: 62px;
+    padding: 0 22px;
+
+    border-radius: 14px;
+    border: 1px solid rgba(210, 224, 246, 0.95);
+    background: #ffffff;
+
+    display: flex;
+    align-items: center;
+    gap: 14px;
+
+    color: #061b4e;
+    font-size: 24px;
+    font-weight: 900;
+}
+
+.location-icon {
+    color: #0875ff;
+}
+
+/* 호출 버튼 */
+.call-button {
+    width: 100%;
+    height: 66px;
+    margin-top: 18px;
+
+    border: none;
+    border-radius: 14px;
+
+    background: linear-gradient(135deg, #0875ff, #0054e3);
+    color: white;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+
+    font-size: 22px;
+    font-weight: 900;
+
+    cursor: pointer;
+    box-shadow: 0 14px 28px rgba(0, 91, 216, 0.24);
+}
+
+.call-button:hover {
+    opacity: 0.94;
+}
+
+.call-button:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+/* 안내 박스 */
+.info-box {
+    width: 100%;
+    min-height: 112px;
+    padding: 22px 28px;
+
+    border-radius: 16px;
+    border: 1px solid rgba(210, 224, 246, 0.95);
+    background: rgba(239, 246, 255, 0.78);
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    text-align: left;
+}
+
+.info-box strong {
+    display: block;
+    margin-bottom: 8px;
+
+    color: #061b4e;
+    font-size: 17px;
+    font-weight: 900;
+}
+
+.info-box p {
+    margin: 0;
+
+    color: #162957;
+    font-size: 16px;
+    line-height: 1.6;
+    font-weight: 700;
+}
+
+.mini-robot-icon img {
+    width: 85px;
+    height: 85px;
+    object-fit: contain;
+    display: block;
+}
+
+/* 호출 결과 상태 */
+#callResult.success {
+    color: #16c784;
+}
+
+#callResult.error {
+    color: #ef4444;
+}
+
+/* 작은 화면 대응 */
+@media (max-width: 900px) {
+    body {
+        overflow: auto;
+    }
+
+    .qrcall-page {
+        min-height: 100vh;
+        height: auto;
+    }
+
+    .qrcall-header {
+        height: 80px;
+        padding: 0 20px;
+    }
+
+    .logo-image {
+        width: 210px;
+    }
+
+    .header-space {
+        width: 70px;
+    }
+
+    .qrcall-content {
+        height: auto;
+        min-height: calc(100vh - 80px);
+        padding: 46px 24px;
+    }
+
+    .qrcall-layout {
+        grid-template-columns: 1fr;
+        gap: 24px;
+    }
+
+    .qrcall-left h1 {
+        font-size: 32px;
+    }
+
+    .qrcall-left > p {
+        font-size: 18px;
+    }
+
+    .call-robot-area {
+        width: 300px;
+        height: 240px;
+    }
+
+    .call-robot-image {
+        width: 220px;
+    }
+
+    .robot-circle {
+        width: 210px;
+        height: 210px;
+    }
+
+    .question-mark {
+        left: 20px;
+        top: 18px;
+        font-size: 58px;
+    }
+
+    .call-card,
+    .info-box {
+        width: 100%;
+    }
+
+    .location-select {
+        font-size: 20px;
+    }
+}

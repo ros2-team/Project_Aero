@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 import os
 from glob import glob
 
-package_name = 'robot_bringup'
+package_name = 'web_bridge'
 
 setup(
     name=package_name,
@@ -17,7 +17,7 @@ setup(
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='kim',
-    maintainer_email='kim@todo.todo',
+    maintainer_email='ehrud2235@naver.com',
     description='TODO: Package description',
     license='TODO: License declaration',
     extras_require={
@@ -27,6 +27,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'web_data = web_bridge.web_data:main',
         ],
     },
 )

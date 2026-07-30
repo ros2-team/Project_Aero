@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 import os
 from glob import glob
 
-package_name = 'robot_bringup'
+package_name = 'perception'
 
 setup(
     name=package_name,
@@ -17,7 +17,7 @@ setup(
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='kim',
-    maintainer_email='kim@todo.todo',
+    maintainer_email='ehrud2235@naver.com',
     description='TODO: Package description',
     license='TODO: License declaration',
     extras_require={
@@ -27,6 +27,11 @@ setup(
     },
     entry_points={
         'console_scripts': [
+        'front_rear_lidar = perception.front_rear_lidar:main',
+        'hsv_tracker = perception.hsv_tracker:main',
+        'rearcam_ctrl = perception.rearcam_ctrl:main',
+        'rearcam = perception.rearcam:main',
+        'docking_node = perception.docking_node:main',
         ],
     },
 )
