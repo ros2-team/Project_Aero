@@ -42,7 +42,7 @@ class WebPauseNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    from airport_guide.blackboard import Blackboard
+    from behavior_tree.blackboard import Blackboard
     db = Blackboard()
     node = WebPauseNode(blackboard=db)
     

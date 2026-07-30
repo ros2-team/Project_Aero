@@ -13,8 +13,8 @@ def generate_launch_description():
 
     test_bt_node = Node(
         package='behavior_tree',
-        executable='test_bt',
-        name='test_bt',
+        executable='bt_main',
+        name='bt_main',
         output='screen'
     )
 

@@ -7,7 +7,7 @@ import json                      # 🎯 JSON 파싱을 위해 추가
 import math
 import time
 from rclpy.qos import qos_profile_sensor_data
-from airport_guide.blackboard import GoalState
+from behavior_tree.blackboard import GoalState
 from geometry_msgs.msg import PoseWithCovarianceStamped
 
 class ArrivalNode(Node):
@@ -16,7 +16,7 @@ class ArrivalNode(Node):
         self.blackboard = blackboard
 
         self.amcl_sub = self.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self.pose_callback, 10)
-        
+
         # WebBridgeNode가 발행하는 웹 명령 토픽 직접 구독 추가
         self.command_sub = self.create_subscription(
             String,
@@ -234,7 +234,7 @@ class ArrivalNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    from airport_guide.blackboard import Blackboard
+    from behavior_tree.blackboard import Blackboard
     db = Blackboard()
     node = ArrivalNode(blackboard=db)
     try:

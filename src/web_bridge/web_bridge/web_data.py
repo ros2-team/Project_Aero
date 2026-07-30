@@ -8,9 +8,8 @@ from rclpy.node import Node
 from std_msgs.msg import String
 
 class WebBridgeNode(Node):
-    def __init__(self, blackboard):
+    def __init__(self):
         super().__init__("web_bridge_node")
-        self.blackboard = blackboard
         self.flask_base_url = "http://192.168.0.9:5000"
         self.last_handled_command_id = -1
         self.polling_interval = 0.5
@@ -445,11 +444,7 @@ class WebBridgeNode(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    from airport_guide.blackboard import Blackboard
-
-    shared_blackboard = Blackboard()
-
-    node = WebBridgeNode(blackboard=shared_blackboard)
+    node = WebBridgeNode()
 
     try:
         rclpy.spin(node)

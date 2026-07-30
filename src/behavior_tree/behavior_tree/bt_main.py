@@ -11,10 +11,9 @@ from rclpy.action import ActionClient
 # ---------------------------------------------------------------------
 # 📦 아키텍처 핵심 노드 및 변환 노드 패키지 임포트
 # ---------------------------------------------------------------------
-from airport_guide.blackboard import Blackboard, GoalState
-from airport_guide.web_data import WebBridgeNode                  # Flask 감시 노드
+from behavior_tree.blackboard import Blackboard, GoalState
 
-from airport_guide.bt_nodes import (
+from behavior_tree.bt_nodes import (
     Selector, Sequence,
     ConditionBatteryLow, ActionSystemShutdown,
     ConditionSensorTimeout, ActionSensorEmergencyStop,
@@ -27,11 +26,11 @@ from airport_guide.bt_nodes import (
     ConditionQrAvailable, ActionExecuteQrCall, # qr
     ActionIdle,
 )
-from airport_guide.battery_node import BatteryNode
-from airport_guide.arrival_node import ArrivalNode
-from airport_guide.front_cam_node import FrontCameraNode
-from airport_guide.web_pause import WebPauseNode
-from airport_guide.qr_node import QrCallNode
+from behavior_tree.battery_node import BatteryNode
+from behavior_tree.arrival_node import ArrivalNode
+from behavior_tree.front_cam_node import FrontCameraNode
+from behavior_tree.web_pause import WebPauseNode
+from behavior_tree.qr_node import QrCallNode
 
 
 class AirportGuideBT(Node):
@@ -324,7 +323,6 @@ def main(args=None):
     
     shared_blackboard = Blackboard()
 
-    web_bridge_node = WebBridgeNode(shared_blackboard)
     bt_node = AirportGuideBT(shared_blackboard)
     battery_node = BatteryNode(shared_blackboard)
     arrival_node = ArrivalNode(shared_blackboard)
@@ -333,7 +331,6 @@ def main(args=None):
     qr_node = QrCallNode(shared_blackboard)
 
     executor = MultiThreadedExecutor()
-    executor.add_node(web_bridge_node)
     executor.add_node(bt_node)
     executor.add_node(battery_node)
     executor.add_node(arrival_node)
@@ -346,7 +343,6 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
-        web_bridge_node.destroy_node()
         bt_node.destroy_node()
         battery_node.destroy_node()
         arrival_node.destroy_node()

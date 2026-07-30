@@ -33,6 +33,7 @@ setup(
         'path_node = behavior_tree.path_node:main',
         'bt_main = behavior_tree.bt_main:main',
         'web_pause = behavior_tree.web_pause:main',
+        'qr_node = behavior_tree.qr_node:main',
         ],
     },
 )

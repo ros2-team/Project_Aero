@@ -3,7 +3,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 import json
-from airport_guide.blackboard import Blackboard
+from behavior_tree.blackboard import Blackboard
 
 class QrCallNode(Node):
     def __init__(self, blackboard):

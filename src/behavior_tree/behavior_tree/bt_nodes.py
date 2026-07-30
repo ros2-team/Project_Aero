@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import rclpy
-from airport_guide.blackboard import GoalState, ChargingState
+from behavior_tree.blackboard import GoalState, ChargingState
 
 class BTNode:
     def __init__(self, name):
