@@ -21,8 +21,8 @@ class Blackboard:
         self.battery_level = 100.0        
         self.last_sensor_time = time.time() 
         self.obstacle_distance = 10.0     
-        self.front_obstacle_distance = 10.0 
-        self.rear_obstacle_distance = 10.0  
+        self.front_obstacle_distance = None
+        self.rear_obstacle_distance = None
         self.is_front_human = False         
         self.is_rear_human = False          
         self.human_distance = 1.2         
@@ -57,3 +57,6 @@ class Blackboard:
         self.current_waypoint_index = 0
         self.navigation_active = False
         self.navigation_finished = False
+
+        #qr 변수 
+        self.qr_route_backup = None

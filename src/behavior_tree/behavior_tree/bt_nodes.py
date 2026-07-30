@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import rclpy
-from behavior_tree.blackboard import GoalState, ChargingState
+from airport_guide.blackboard import GoalState, ChargingState
 
 class BTNode:
     def __init__(self, name):
@@ -49,7 +49,7 @@ class ActionSystemShutdown(BTNode):
         if blackboard.charging_state == ChargingState.IDLE:
             ros_node.get_logger().error("🔋 배터리 부족 감지 -> 충전소 이동 시작")
             ros_node.cancel_nav_goal()
-            ros_node.send_nav_goal(0.4, -1.54)
+            ros_node.send_nav_goal(-0.029, -0.927)
             blackboard.charging_state = ChargingState.MOVING
         return "RUNNING"
 
@@ -72,14 +72,19 @@ class ConditionWebPause(BTNode):
 
 class ActionWebPauseStop(BTNode):
     def tick(self, blackboard, ros_node):
-        ros_node.get_logger().warn("[PAUSE]시스템 일시정지", throttle_duration_sec=3.0)
-        # 실제 물리 제어(Nav2 목표 취소)는 ros_node의 메서드를 호출하여 처리 (로봇 속도 알아서 0으로 떨어짐)
+        # 🛠️ [재개 판정 추가] 웹 콜백에 의해 일시정지 플래그가 해제된 경우
+        if not blackboard.is_paused:
+            ros_node.get_logger().info("[RESUME] 일시정지 해제 감지. 주행 상태를 IDLE로 변경하여 주행 재출발을 유도합니다.")
+            ros_node.set_goal_state(GoalState.IDLE)  # 주행 가드(ConditionHasGoal)를 열어주기 위해 IDLE 전이
+            return "SUCCESS"  # 일시정지 브랜치를 완전히 탈출
+
+        # 여전히 일시정지 상태(True)일 때만 하부 제동 로직 수행
+        ros_node.get_logger().warn("[PAUSE]시스템 일시정지 상태 (대기 중...)", throttle_duration_sec=3.0)
         ros_node.cancel_nav_goal()
 
-        # web_pause 에서 goal_name의 ""를 지우면
         if blackboard.goal_name == "":
             ros_node.set_goal_state(GoalState.IDLE)
-            blackboard.is_paused = False  # 초기화 완료 후 다음 주행을 위해
+            blackboard.is_paused = False  
             return "SUCCESS"
         return "RUNNING"
 
@@ -89,64 +94,113 @@ class ConditionEmergency(BTNode):
     # 위험 해제 후의 복구(재출발 준비) 로직은 별도 Action 노드로 분리했다.
     # Condition은 상태를 절대 바꾸지 않고 SUCCESS/FAILURE만 보고한다.
     def tick(self, blackboard, ros_node):
-        if blackboard.front_obstacle_distance <= 70:
+        if blackboard.front_obstacle_distance is not None and blackboard.front_obstacle_distance <= 80:
             return "SUCCESS"
         return "FAILURE"
 
 class ActionEmergencyStop(BTNode):
     def tick(self, blackboard, ros_node):
+        # ros_node.get_logger().info(f"현재 사용자와의 거리입니다 !!! {blackboard.front_obstacle_distance} ", throttle_duration_sec=1.0)
         ros_node.get_logger().error("[🚨 EMERGENCY] 전방 충돌 위험권 진입. 즉시 제동 요청.", throttle_duration_sec=1.0)
         ros_node.cancel_nav_goal()
         return "RUNNING"
 
-class ActionRecoverFromEmergency(BTNode):
-    # [신규] 위험이 해제된 직후, FSM을 재출발 가능한 상태(IDLE)로 되돌리는 '복구 전용 Action'. 
-    # 상태를 바꾸는 책임을 Condition에서 떼어내 이 노드 하나로 명시적으로 모았다. 
-    # EmergencyBranch가 FAILURE를 반환해서 Root Selector가 다음 형제 브랜치로 넘어가기 전에, 
-    # 이 브랜치가 먼저 복구 여부를 체크하고 지나가도록 EmergencyBranch 안에 배치한다.
+########################## 26/7/9 12:51 최신버전  -> test_bt도 수정 ###########################
+# [신규] 모든 안전망을 통과했을 때만 실행되는 최후의 복구 노드
+class ActionGlobalRecovery(BTNode):
     def tick(self, blackboard, ros_node):
-        if blackboard.is_dynamic_obstacle:
-            return "FAILURE"  # 아직 위험 → 복구할 필요 없음, 이 노드 통과 안 함
-        
-        if blackboard.goal_state in [GoalState.CANCELING, GoalState.IDLE] and blackboard.goal_name != "":
-            ros_node.get_logger().info("🏃‍♂️ 전방 장애물 해제. FSM 복구 및 재출발 프로세스 시동.")
-            # [핵심] 직접 대입(blackboard.goal_state = ...) 대신 ros_node에 위임.
-            # 실제 enum 대입은 test_bt.py의 set_goal_state() 안에서만 일어난다.
+        # 1. 여기까지 살아서 내려왔는데, 로봇 상태가 CANCELING(정지)에 묶여있다면?
+        # 2. 그리고 가야 할 목적지(goal_name)가 여전히 남아있다면?
+        if blackboard.goal_state == GoalState.CANCELING and blackboard.goal_name != "":
+            
+            # "오 다 잘 통과했네? 출발~" (상태를 IDLE로 세탁해 줍니다)
+            ros_node.get_logger().info("✅ [안전망 통과] 전/후방 모두 안전합니다. 주행을 재개합니다!")
             ros_node.set_goal_state(GoalState.IDLE)
-            return "FAILURE"  # 복구는 부수 동작이므로 항상 FAILURE를 반환해 다음 브랜치로 넘어가게 함
+            
+        # 상태만 풀어주고, 진짜 주행(Nav2 전송)은 다음 순위가 하도록 무조건 FAILURE를 뱉고 비켜줍니다.
         return "FAILURE"
+    
+# ########################### 26/7/9 12:51 이전버전 ###########################
+# class ActionRecoverFromEmergency(BTNode):
+# # [신규] 위험이 해제된 직후, FSM을 재출발 가능한 상태(IDLE)로 되돌리는 '복구 전용 Action'. 
+# # 상태를 바꾸는 책임을 Condition에서 떼어내 이 노드 하나로 명시적으로 모았다. 
+# # EmergencyBranch가 FAILURE를 반환해서 Root Selector가 다음 형제 브랜치로 넘어가기 전에, 
+# # 이 브랜치가 먼저 복구 여부를 체크하고 지나가도록 EmergencyBranch 안에 배치한다.
+#     def tick(self, blackboard, ros_node):
+#         current_dist = blackboard.front_obstacle_distance
 
+#         # 🛡️ 1. 방어 코드 및 히스테리시스 적용
+#         # 센서값이 없거나 아직 40cm 이하로 가깝다면 아직 위험하므로 복구를 거부합니다.
+#         if current_dist is None or current_dist <= 100.0:
+#             return "FAILURE"
+        
+#         # 🏃 2. 확실히 멀어졌고(40cm 초과), 주행이 정지/취소 상태였으며, 돌아갈 목적지가 있을 때!
+#         if blackboard.goal_state in [GoalState.CANCELING, GoalState.IDLE] and blackboard.goal_name != "":
+#             ros_node.get_logger().info(f"🏃 전방 장애물 비켜섬 완료! (현재 거리: {current_dist:.1f}cm). 주행 재출발 시동.")
+            
+#             # [핵심] 직접 대입(blackboard.goal_state = ...) 대신 ros_node에 위임.
+#             # 실제 enum 대입은 test_bt.py의 set_goal_state() 안에서만 일어난다.
+#             ros_node.set_goal_state(GoalState.IDLE)
+            
+#             return "FAILURE"  # 복구는 부수 동작이므로 무조건 FAILURE를 반환해 다음 브랜치(Nav)로 넘어가게 함
+            
+#         return "FAILURE"
+
+######################### 26/7/9 11:27 이전 버전 #####################
+# class ActionRecoverFromEmergency(BTNode):
+#     # [신규] 위험이 해제된 직후, FSM을 재출발 가능한 상태(IDLE)로 되돌리는 '복구 전용 Action'. 
+#     # 상태를 바꾸는 책임을 Condition에서 떼어내 이 노드 하나로 명시적으로 모았다. 
+#     # EmergencyBranch가 FAILURE를 반환해서 Root Selector가 다음 형제 브랜치로 넘어가기 전에, 
+#     # 이 브랜치가 먼저 복구 여부를 체크하고 지나가도록 EmergencyBranch 안에 배치한다.
+#     def tick(self, blackboard, ros_node):
+#         if blackboard.is_dynamic_obstacle:
+#             return "FAILURE"  # 아직 위험 → 복구할 필요 없음, 이 노드 통과 안 함
+        
+#         if blackboard.goal_state in [GoalState.CANCELING, GoalState.IDLE] and blackboard.goal_name != "":
+#             ros_node.get_logger().info("🏃 전방 장애물 해제. FSM 복구 및 재출발 프로세스 시동.")
+#             # [핵심] 직접 대입(blackboard.goal_state = ...) 대신 ros_node에 위임.
+#             # 실제 enum 대입은 test_bt.py의 set_goal_state() 안에서만 일어난다.
+#             ros_node.set_goal_state(GoalState.IDLE)
+#             return "FAILURE"  # 복구는 부수 동작이므로 항상 FAILURE를 반환해 다음 브랜치로 넘어가게 함
+#         return "FAILURE"
+############################## 26/7/9 14:33 주석처리 ###################################
 # 3. 사용자 추적 브랜치
-class ConditionHumanLost(BTNode):
-    def tick(self, blackboard, ros_node):
-        return "SUCCESS" if blackboard.human_lost else "FAILURE"
+# class ConditionHumanLost(BTNode):
+#     def tick(self, blackboard, ros_node):
+#         return "SUCCESS" if blackboard.human_lost else "FAILURE"
 
-class ActionSearchHuman(BTNode):
-    def tick(self, blackboard, ros_node):
-        ros_node.get_logger().error("❓ [안내 유실] 대상 분실에 따른 제자리 정지.", throttle_duration_sec=3.0)
-        ros_node.cancel_nav_goal()
-        return "RUNNING"
+# class ActionSearchHuman(BTNode):
+#     def tick(self, blackboard, ros_node):
+#         ros_node.get_logger().error("❓ [안내 유실] 대상 분실에 따른 제자리 정지.", throttle_duration_sec=3.0)
+#         ros_node.cancel_nav_goal()
+#         return "RUNNING"
 
 class ConditionHumanFar(BTNode):
     def tick(self, blackboard, ros_node):
-        return "SUCCESS" if blackboard.human_far else "FAILURE"
+        # 🛡️ [핵심 가드] 서비스 중(목적지가 있음)이 아니면 대상이 멀어지든 말든 신경 쓰지 않습니다.
+        if blackboard.goal_name == "":
+            return "FAILURE"
+        
+        # ros_node.get_logger().info(f"현재 상태입니다{blackboard.human_far}")
+        return "SUCCESS" if getattr(blackboard, "human_far", False) else "FAILURE"
 
 class ActionSignalToHuman(BTNode):
     def tick(self, blackboard, ros_node):
         ros_node.get_logger().warn("📢 [대기] 가이드 대상 거리 이탈. 추격 대기 모드 진입.", throttle_duration_sec=3.0)
         ros_node.cancel_nav_goal()
         return "RUNNING"
+    
+############################## 26/7/9 14:33 주석처리 ###################################
+# # 4. 측후방 우회 브랜치
+# class ConditionObstacle(BTNode):
+#     def tick(self, blackboard, ros_node):
+#         if blackboard.obstacle_warning or blackboard.rear_obstacle_distance is not None and (0.0 < blackboard.rear_obstacle_distance <= 1.5):
+#             return "SUCCESS"
+#         return "FAILURE"
 
-# 4. 측후방 우회 브랜치
-class ConditionObstacle(BTNode):
-    def tick(self, blackboard, ros_node):
-        if blackboard.obstacle_warning or (0.0 < blackboard.rear_obstacle_distance <= 1.5):
-            return "SUCCESS"
-        return "FAILURE"
-
-class ActionAvoidance(BTNode):
-    def tick(self, blackboard, ros_node):
-        return "RUNNING"
+# class ActionAvoidance(BTNode):
+#     def tick(self, blackboard, ros_node):
+#         return "RUNNING"
 
 # 5. 경유지 도착 브랜치
 class ConditionArrived(BTNode):
@@ -174,6 +228,58 @@ class ActionMoveToGoal(BTNode):
         # Nav2 액션 서버로 목표 전송 (내부적으로 SENT 상태 기록 등 수행)
         ros_node.send_nav_goal(blackboard.goal_x, blackboard.goal_y)
         return "RUNNING"
+    
+
+# qr !!
+class ConditionQrAvailable(BTNode):
+    def tick(self, blackboard, ros_node):
+        # 기존 주행 목표가 완벽히 비어있고, 수신된 QR 데이터가 대기 중일 때만 동작
+        has_qr_data = hasattr(blackboard, "qr_route_backup") and blackboard.qr_route_backup
+        if blackboard.goal_name == "" and has_qr_data:
+            return "SUCCESS"
+        
+        if blackboard.goal_name != "" and hasattr(blackboard, "qr_route_backup") and blackboard.qr_route_backup:
+            # [로그 보완] 어떤 목적지 데이터가 씹혔는지 명시적으로 출력
+            rejected_target = blackboard.qr_route_backup[0].get("location_name", "알 수 없음")
+            ros_node.get_logger().warn(
+                f"[QR 씹기] 기존 주행 스케줄('{blackboard.goal_name}')이 존재하므로 "
+                f"수신된 QR 요청('{rejected_target}')을 폐기합니다.", 
+                throttle_duration_sec=1.0
+            )
+            blackboard.qr_route_backup = None # 데이터 폐기
+            
+        return "FAILURE"
+    
+
+class ActionExecuteQrCall(BTNode):
+    def tick(self, blackboard, ros_node):
+        # 대기 중이던 QR 데이터를 정식 주행 경로로 승격
+        qr_route = blackboard.qr_route_backup
+        
+        ros_node.get_logger().info(f"bt_node 실행 !!!!!로봇 공백 확인!!!!! 승격 데이터 경로 매핑 시작: {qr_route}")
+        
+        blackboard.web_route_list = qr_route  # 주행 리스트에 씌움 
+        blackboard.current_waypoint_index = 0
+        blackboard.navigation_finished = False
+        
+        # 웹 화면에 현재 상태가 QR 주행 중임을 리포트하기 위해 액션명 동기화
+        # ?? 이게 싫제로 동작하는지 유무는 모름 
+        blackboard.web_action = "qr_call_navigation"
+        
+        # Flask에서 정의한 딕셔너리 스키마 구조 추출 ("location_name", "x", "y")
+        first_wp = qr_route[0]
+        blackboard.goal_name = first_wp.get("location_name", "QR 목적지")
+        blackboard.goal_x = float(first_wp.get("x", 0.0))
+        blackboard.goal_y = float(first_wp.get("y", 0.0))
+        
+        ros_node.get_logger().info(f"bt_node 실행 !!!!!로봇 공백 확인!!!!! 타깃 목적지({blackboard.goal_name})로 출발합니다.")
+        
+        # 상태를 IDLE로 변환하여 다음 틱에서 nav_br(ConditionHasGoal)이 인식하고 움직이도록 유도
+        ros_node.set_goal_state(GoalState.IDLE)
+        
+        # 처리가 완료된 백업 변수 리셋
+        blackboard.qr_route_backup = None
+        return "SUCCESS"
 
 # 7. 기본 정적 대기 브랜치
 class ActionIdle(BTNode):

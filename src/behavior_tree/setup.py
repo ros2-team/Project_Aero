@@ -31,7 +31,7 @@ setup(
         'battery_node = behavior_tree.battery_node:main',
         'front_cam_node = behavior_tree.front_cam_node:main',
         'path_node = behavior_tree.path_node:main',
-        'test_bt = behavior_tree.test_bt:main',
+        'bt_main = behavior_tree.bt_main:main',
         'web_pause = behavior_tree.web_pause:main',
         ],
     },
