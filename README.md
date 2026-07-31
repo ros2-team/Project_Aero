@@ -45,14 +45,7 @@
 
 ## 5. 시스템 구조도
 
-```mermaid
-graph TD
-    A[Sensing: LiDAR/Camera] --> B(Perception: Object Detection)
-    B --> C{Obstacle Detected?}
-    C -->|Yes| D[Behavior Tree: Abort & E-Brake]
-    C -->|No| E[Nav2: Path Planning]
-    D --> F[Control: Motor Commands]
-    E --> F
+**oo**
 
 ## 6. 핵심 구현 내용
 
