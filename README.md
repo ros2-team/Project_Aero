@@ -64,6 +64,8 @@
 [ Nav2 Stack ]              [ Sensor Fusion ]              [ Auto Docking ]
  ├─ AMCL (위치 추정)          ├─ YOLO (사용자 인지)          ├─ ArUco Detection
  └─ Controller/Planner       └─ LiDAR (거리 및 추종)         └─ Precise Pure Pursuit
+```
+
 
 ## 6. 핵심 구현 내용
 
