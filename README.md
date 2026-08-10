@@ -122,17 +122,28 @@
 ## 9. 저장소 구조 (Directory Structure)  수정필요 
 ```text
 Aero/
-├── aero_bringup/               # 시스템 일괄 실행 Launch 파일 및 파라미터
-│   ├── launch/
-│   └── param/
-├── aero_behavior_tree/          # Behavior Tree 엔진 및 Custom Control Nodes
-│   ├── src/
-│   └── bt_xml/                 # Behavior Tree XML 정의 파일
-├── aero_navigation/            # Nav2 설정, AMCL, Costmap 파라미터
-├── aero_perception/            # YOLO + LiDAR 센서 퓨전 및 ArUco 도킹 노드
-│   ├── src/
-│   │   ├── yolo_lidar_fusion.py
-│   │   └── aruco_docking.py
-├── aero_web_bridge/            # ROS 2 - Web Socket Bridge 노드
-└── aero_web_ui/                # Flask 기반 대시보드 및 관제 웹페이지
+├── src
+│   ├── robot_bringup           # 시스템 일괄 실행 Launch 파일 및 파라미터
+│   │   ├── launch
+│   │   └── maps
+│   ├── ar_interfaces           # Aero에 사용되는 커스텀 메세지 타입 정의  
+│   │   └── msg
+│   ├── behavior_tree           # Behavior Tree 및 커스텀 Control Nodes
+│   │   ├── behavior_tree
+│   │   └── launch
+│   ├── perception              # YOLO + LiDAR 센서 퓨전 및 ArUco 도킹 노드
+│   │   ├── launch
+│   │   └── perception
+│   └── web_bridge              # ROS 2 - Web Socket Bridge 노드
+│       ├── launch
+│       └── web_bridge
+└── web                         # Flask 기반 대시보드 및 관제 웹페이지
+    └── flask_server
+        ├── app.py
+        ├── database
+        ├── static
+        │   ├── css
+        │   ├── img
+        │   └── js
+        └── templates
 
