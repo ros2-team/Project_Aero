@@ -1,149 +1,137 @@
-# 🤖 Aero: 자율주행 공항 안내 로봇 (Autonomous Airport Guide Robot)
+# Aero · 자율주행 공항 안내 로봇
 
-> **ROS 2 Humble** 및 **Behavior Tree** 기반으로 동작하며, 공항 내부에서 목적지 길안내, YOLO+LiDAR 센서 퓨전 기반 사용자 추종, ArUco 마커 기반 자동 도킹 충전 서비스를 제공하는 자율주행 로봇 시스템입니다.
+> 목적지 선택부터 도착 안내까지, 웹과 ROS 2를 연결한 실내 길 안내 서비스
 
----
+<p align="center">
+  <img src="web/flask_server/static/img/ui/normal.png" alt="공항 안내 로봇 Aero의 UI 캐릭터" width="380">
+</p>
 
-## 1. 프로젝트 개요
-* **프로젝트명**: 자율주행형 공항 안내 로봇 **Aero**
-* **개발 기간**: 2026.03 ~ 2026.07
-* **개발 환경**: ROS 2 Humble (Ubuntu 22.04 LTS), Python 3.10, C++, MySQL, Flask, JavaScript
+**[실제 로봇 시연 영상](https://youtu.be/HOmyxXTMj24)** · [핵심 코드](#핵심-코드) · [실행 방법](#실행-방법)
 
----
+## 프로젝트 소개
 
-## 2. 개발 배경 및 목적
-* **공항 이용객 길찾기 지원**: 복잡하고 넓은 공항 내부에서 초행 이용객이나 탑승 시간이 촉박한 승객을 위해 자율주행 기반의 길안내 서비스 제공.
-* **사용자 친화적 인터페이스**: 복잡한 지도를 직접 보지 않고도 로봇을 따라 목적지에 도착할 수 있도록 직관적인 시각화 UI 및 추종 기능 구현.
-* **안전 및 예외 처리 강화**: 혼잡한 환경에서의 장애물 회피, 배터리 부족, 센서 오류 등 다양한 예외 상황에 유연하게 대응하는 Behavior Tree 제어 구조 적용.
+Aero는 GPS 사용이 어려운 대형 실내 시설을 가정해 만든 공항 안내 로봇입니다. 사용자가 로봇 화면에서 목적지를 선택하면 Nav2로 이동하며 안내합니다. 주변에 로봇이 없을 때에는 장소별 QR 코드로 호출할 수 있습니다.
 
----
+**로밍 → 사용자 확인 → 목적지 선택 → 길 안내 → 도착 → 다시 로밍**으로 이어지는 서비스 흐름을 구현했습니다. 실제 공항에 배치한 제품이 아닌 TurtleBot3 기반 실내 프로토타입입니다.
 
-## 3. 주요 기능
-* **자율 길안내 (Navigation)**: Nav2 및 AMCL 기반으로 장애물을 회피하며 목적지까지 안정적 주행.
-* **경유지 및 경로 변경**: 안내 중 사용자 요청에 따라 경유 순서 변경 및 목적지 실시간 재설정.
-* **사용자 추종 (Follow Me)**: 후방 카메라(YOLO)와 LiDAR 센서 퓨전을 통해 승객 이탈 여부를 감지하고 실시간 정지 및 추종.
-* **자동 도킹 충전 (Auto Docking)**: Nav2 대략적 접근 후, ArUco 마커 기반 상대 위치 계산을 통해 충전 단자로 정밀 곡선 접근 도킹.
-* **QR 코드 로봇 호출**: 공항 내 주요 구역의 QR 코드를 스캔하여 로봇을 현재 호출 위치로 이동시키는 원격 호출 서비스.
-* **실시간 관제 & 웹 UI**: HTML5 Canvas 및 Socket.IO를 활용하여 로봇 위치, 주행 경로, 배터리 잔량 및 상태를 실시간 시각화.
+| 항목 | 내용 |
+| --- | --- |
+| 개발 기간 | 2026.06–2026.07 |
+| 프로젝트 형태 | 팀 프로젝트 |
+| 하드웨어 | TurtleBot3 Waffle Pi, Raspberry Pi, 2D LiDAR, 전·후방 카메라 |
+| 로봇 소프트웨어 | Ubuntu 22.04, ROS 2 Humble, Python, Nav2, AMCL, YOLOv8, OpenCV |
+| 서비스 소프트웨어 | Flask, Flask-SocketIO, MySQL, HTML/CSS/JavaScript |
 
----
+## 담당 역할 · 김동우
 
-## 4. 기술 스택
+팀 전체는 주행·인지·행동 제어·웹을 나누어 개발했습니다. [김동우(Ssu4645)](https://github.com/Ssu4645)는 **프로젝트 기획, Web UI·Flask 서버, 웹–ROS 2 통신, 데이터베이스**를 담당했습니다.
 
-### Robot & System
-* **OS / Middleware**: Linux (Ubuntu 22.04 LTS), ROS 2 Humble
-* **Platform & Hardware**: TurtleBot3, 2D LiDAR, RGB-D Camera
+- **서비스 기획:** 로밍부터 안내 종료까지의 이용 흐름과 장소별 QR 호출을 설계했습니다.
+- **Web UI:** 로봇 부착 화면과 QR 접속 화면을 구분하고 대기·목적지 선택·이동·도착 상태에 맞게 구성했습니다.
+- **웹–로봇 연결:** WebBridge에서 명령을 조회해 ROS 2로 전달하고 로봇 상태를 Flask로 보고하도록 연결했습니다.
+- **MySQL:** 장소 이름·좌표와 호출 정보를 연결해 사용자 선택을 로봇의 이동 목표로 변환했습니다.
 
-### Software & Algorithm
-* **Navigation & Control**: Navigation2, AMCL, Behavior Tree (BehaviorTree.CPP / py_trees)
-* **Vision & Sensor Fusion**: OpenCV, YOLOv8, ArUco Marker, LiDAR-Camera Fusion
-* **Database**: MySQL
+## 주요 기능
 
-### Web & Integration
-* **Frontend**: HTML5, CSS3, JavaScript (ES6+), HTML5 Canvas, Socket.IO Client
-* **Backend**: Python 3.10, Flask, Flask-SocketIO
-* **Communication**: REST API, ROS 2 Topic/Action/Service, Web Bridge Node
+| 기능 | 구현 내용 |
+| --- | --- |
+| 목적지 안내 | 장소 목록에서 하나 이상의 목적지를 선택하고 순서대로 안내 |
+| QR 호출 | QR에 연결된 장소 정보를 기준으로 호출 요청 생성 |
+| 주행 상태 표시 | 안내 상태와 경로를 웹 화면에 표시하고 일시정지·재개·중지 요청 처리 |
+| 행동 제어 | Python으로 작성한 Selector·Sequence와 Blackboard로 상태와 우선순위 관리 |
+| 사용자 인지 | 전·후방 카메라의 사람 검출, 후방 HSV 특징 추적과 LiDAR 정보를 안내 제어에 활용 |
 
----
+## 시스템 구조
 
-## 5. 시스템 아키텍처 (System Architecture)
-
-```text
- [ Web UI (User / Admin) ]
-            │ (REST API / WebSockets)
-            ▼
-   [ Flask Web Server ] ◄───► [ Web Bridge Node ]
-                                     │ (ROS 2 Topics/Actions)
-                                     ▼
-                      ┌─────────────────────────────┐
-                      │    Behavior Tree Engine     │  (우선순위 제어 및 상태 관리)
-                      └──────────────┬──────────────┘
-                                     │
-      ┌──────────────────────────────┼──────────────────────────────┐
-      ▼                              ▼                              ▼
-[ Nav2 Stack ]              [ Sensor Fusion ]              [ Auto Docking ]
- ├─ AMCL (위치 추정)          ├─ YOLO (사용자 인지)          ├─ ArUco Detection
- └─ Controller/Planner       └─ LiDAR (거리 및 추종)         └─ Precise Pure Pursuit
+```mermaid
+flowchart TD
+    UI["로봇 UI · QR 호출 UI"] <-->|"HTTP · Socket.IO"| F["Flask 서버"]
+    F <--> D["MySQL · 장소 정보"]
+    F <-->|"HTTP 명령 조회 · 상태 보고"| W["WebBridge Node"]
+    W <-->|"ROS 2 토픽"| B["Behavior Tree · Blackboard"]
+    P["카메라 · LiDAR 인지"] --> B
+    B --> N["Nav2 · AMCL"]
+    N --> R["TurtleBot3"]
 ```
 
+웹 서버와 로봇 사이에는 HTTP API를 사용합니다. WebBridge가 새 명령을 주기적으로 조회해 ROS 2 토픽으로 전달하고 로봇 상태와 경로를 서버에 보고합니다. **Socket.IO는 Flask 서버와 브라우저 사이의 화면 갱신에 사용합니다.**
 
-## 6. 핵심 구현 내용
+## 주요 구현과 문제 해결
 
-### ① 행동 트리 기반 상태 제어 (Behavior Tree Engine)
-* 기존 FSM 대비 상태 관리 및 예외 처리가 용이한 **Behavior Tree**를 적용하여 로봇의 제어 우선순위를 체계적으로 관리.
-* **Root Selector 제어 우선순위**:
-  1. `Battery Check`: 배터리 임계치 미만 시 기존 미션 중단 후 충전소 복귀 수행
-  2. `Sensor Check`: 센서 데이터 이탈 또는 HW 에러 시 긴급 정지
-  3. `Pause Check`: 승객의 웹 UI 일시정지 요청 처리
-  4. `Distance Check`: 전방/후방 안전거리 확보 및 승객 이탈 감지
-  5. `Goal Check`: 목적지 유무 및 변경 요청 확인
-  6. `Nav2 Execution`: Nav2 Stack을 통한 목적지 자율주행 실행
-  7. `QR Service`: 원격 QR 호출 미션 처리
-  8. `Idle State`: 대기 모드 전환 및 시스템 상태 발행
+### 명령의 중복 처리 방지
 
-### ② ArUco 마커 기반 정밀 자동 도킹 (Auto Docking)
-* **위치 오차 극복**: Nav2 글로벌 주행의 도킹 오차를 해결하기 위해 2단계 도킹 전략 도입.
-* **곡선 접근 알고리즘**: Nav2로 충전소 근처 접근 후, 카메라로 ArUco 마커 인식 ➔ 상대 3D Pose($x, y, yaw$)를 계산하여 Smooth Curve 곡선 접근 알고리즘으로 단자 정밀 결합.
+주기적인 조회에서는 같은 명령이 다시 수신될 수 있습니다. 명령 ID와 처리 여부를 사용하고 WebBridge에서 마지막으로 처리한 ID를 확인해 새로운 명령만 전달하도록 구성했습니다.
 
-### ③ YOLO + LiDAR 센서 퓨전 기반 사용자 추종 (Follow Me)
-* **전방 안전거리 감지**: 2D LiDAR 스캔 데이터를 분석하여 전방 장애물 접근 시 즉시 감속 및 정지.
-* **후방 사용자 추종**: 후방 카메라의 YOLOv8 Bounding Box 영역과 LiDAR Point Cloud 데이터를 매핑하여 사용자의 3D 위치 추적. 승객 이탈 시 안내 일시정지 및 안내 음성/UI 출력.
+### 명령 전달과 상태 표시 분리
 
-### ④ Web Bridge Node 및 실시간 UI 연동
-* ROS 2와 Web 간의 실시간 비동기 양방향 통신 구현.
-* **Web Bridge Node**: `/tf`, `/amcl_pose`, `/plan` 등 ROS 2 토픽을 JSON 규격으로 가공하여 WebSocket으로 브로드캐스팅.
+사용자가 버튼을 누른 시점과 로봇이 실제로 행동을 수행하는 시점은 다릅니다. 명령 전달 이후 로봇의 상태를 다시 서버로 보고하고 Socket.IO로 화면을 갱신하도록 구성했습니다.
 
----
+### 장소 이름을 주행 좌표로 연결
 
-## 7. 주요 ROS 2 인터페이스 (Interfaces)
+사용자는 장소 이름을 선택하지만 Nav2에는 위치와 방향이 필요합니다. MySQL 장소 정보와 선택 순서로 경로 데이터를 구성하고 WebBridge를 거쳐 행동 제어 노드에 전달합니다. 경로 전처리 노드는 Nav2의 `ComputePathToPose` 결과를 웹 표시용 데이터로 변환합니다.
 
-| 분류 | Interface Name | Type | 설명 |
-| :--- | :--- | :--- | :--- |
-| **Topic** | `/aero/battery_status` | `sensor_msgs/msg/BatteryState` | 로봇 배터리 잔량 및 충전 상태 |
-| **Topic** | `/aero/user_pose` | `geometry_msgs/msg/PoseStamped` | YOLO+LiDAR 퓨전으로 계산된 승객 위치 |
-| **Topic** | `/aero/web_status` | `std_msgs/msg/String` | 웹 UI로 전달되는 로봇 제어 상태 메시지 |
-| **Action** | `/navigate_to_pose` | `nav2_msgs/action/NavigateToPose` | Nav2 자율주행 목표 지점 전달 |
-| **Service** | `/aero/trigger_docking` | `std_srvs/srv/Trigger` | 자동 도킹 시퀀스 시작 요청 |
+## 핵심 코드
 
----
+| 관심 영역 | 코드 |
+| --- | --- |
+| 웹 API·명령·상태 처리 | [Flask 서버](web/flask_server/app.py) |
+| 로봇 UI·QR UI | [화면 템플릿](web/flask_server/templates) · [JavaScript](web/flask_server/static/js) |
+| 장소 정보 조회 | [데이터베이스 모듈](web/flask_server/database) |
+| 웹–ROS 2 통신 | [WebBridge](src/web_bridge/web_bridge/web_data.py) |
+| 행동 우선순위·상태 관리 | [Behavior Tree](src/behavior_tree/behavior_tree/bt_main.py) · [제어 노드](src/behavior_tree/behavior_tree/bt_nodes.py) |
+| 경로 전처리 | [Path Node](src/behavior_tree/behavior_tree/path_node.py) |
+| 사용자 인지 | [Perception](src/perception/perception) |
+| 통합 실행 | [Robot Launch](src/robot_bringup/launch/robot.launch.py) |
 
-## 8. 주요 문제 해결 (Troubleshooting)
+## 실행 방법
 
-### 1. Nav2 도착 오차로 인한 충전 단자 결합 실패
-* **문제**: Nav2 자율주행만으로는 2~3cm 내외의 정밀도 오차가 발생하여 충전 단자에 물리적으로 정확히 도킹하지 못하는 현상 발생.
-* **해결**: Nav2 목적지를 충전소 1m 전방으로 설정하고, 이후 ArUco 마커를 인식하여 카메라-마커 간 상대 좌표 기반의 Pure Pursuit 제어로 전환하는 **2단계 도킹(Two-stage Docking) 알고리즘**을 구현하여 도킹 성공률 98% 달성.
+이 저장소는 실습 당시 로봇·네트워크·지도 환경을 기준으로 작성되었습니다. ROS 2 Humble, TurtleBot3 브링업, 카메라, Nav2·AMCL과 MySQL을 별도로 준비해야 합니다.
 
-### 2. 동적 장애물 및 승객 이탈 시 Behavior Tree 교착 상태 (Deadlock)
-* **문제**: 승객 추종 주행 중 승객이 시야에서 벗어났을 때 Nav2 주행 명령과 추종 정지 명령이 충돌하는 현상.
-* **해결**: Behavior Tree에 `Distance Check` 데코레이터 노드를 삽입하여 승객과의 거리가 2m 이상 벌어지면 Nav2 Action을 즉시 `PAUSE` 상태로 전환하고 UI에 경고 메시지를 띄우도록 제어 로직 구조화.
+### 1. 복제 및 빌드
 
----
+```bash
+git clone https://github.com/ros2-team/Project_Aero.git
+cd Project_Aero
+source /opt/ros/humble/setup.bash
+rosdep install --from-paths src --ignore-src -r -y
+colcon build --symlink-install
+source install/setup.bash
+```
 
-## 9. 저장소 구조 (Directory Structure)  수정필요 
-```text
-Aero/
-├── src
-│   ├── robot_bringup           # 시스템 일괄 실행 Launch 파일 및 파라미터
-│   │   ├── launch
-│   │   └── maps
-│   ├── ar_interfaces           # Aero에 사용되는 커스텀 메세지 타입 정의  
-│   │   └── msg
-│   ├── behavior_tree           # Behavior Tree 및 커스텀 Control Nodes
-│   │   ├── behavior_tree
-│   │   └── launch
-│   ├── perception              # YOLO + LiDAR 센서 퓨전 및 ArUco 도킹 노드
-│   │   ├── launch
-│   │   └── perception
-│   └── web_bridge              # ROS 2 - Web Socket Bridge 노드
-│       ├── launch
-│       └── web_bridge
-└── web                         # Flask 기반 대시보드 및 관제 웹페이지
-    └── flask_server
-        ├── app.py
-        ├── database
-        ├── static
-        │   ├── css
-        │   ├── img
-        │   └── js
-        └── templates
+Flask, Flask-SocketIO, PyMySQL, requests, ultralytics, OpenCV 등 Python 의존성도 필요합니다. 저장소 안의 TurtleBot3 관련 gitlink만으로 외부 패키지 설치가 완료되지는 않으므로 ROS 2 Humble에 맞는 TurtleBot3 패키지를 별도로 구성해야 합니다.
 
+### 2. 환경 설정
+
+| 확인할 항목 | 위치 |
+| --- | --- |
+| Flask 서버 주소 | `src/web_bridge/web_bridge/web_data.py`의 `flask_base_url` |
+| DB 접속 정보와 장소 데이터 | `web/flask_server/database/` |
+| 지도·초기 위치·Nav2 설정 | 로봇의 Nav2·AMCL 실행 환경 및 `src/robot_bringup/maps/` |
+| 카메라 토픽·보정값·장치 경로 | `src/perception/` 및 전방 카메라 노드 |
+| YOLO 모델 | `yolov8n.pt`를 로드할 수 있는 환경 |
+
+현재 저장소에는 초기 DB 스키마·장소 데이터 전체와 외부 로봇 설정이 포함되어 있지 않습니다. 위 구성을 준비한 후 실행합니다.
+
+### 3. 웹과 ROS 2 애플리케이션 실행
+
+```bash
+# 터미널 1: 프로젝트 루트에서 웹 서버 실행
+python3 web/flask_server/app.py
+```
+
+```bash
+# 터미널 2: 로봇 브링업·Nav2·AMCL·카메라를 준비한 뒤 실행
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 launch robot_bringup robot.launch.py
+```
+
+브라우저에서 `http://<Flask 서버 IP>:5000`으로 접속합니다. `robot.launch.py`는 Perception·Behavior Tree·WebBridge를 실행하며 하드웨어 드라이버와 Nav2를 함께 시작하는 런처는 아닙니다.
+
+## 결과와 구현 범위
+
+목적지 선택·QR 호출·웹 명령 전달·로봇 행동·화면 상태 표시가 이어지는 안내 흐름을 구현하고 시연했습니다. 로봇 기능을 사용자 서비스로 연결하려면 명령뿐 아니라 처리 결과와 상태를 되돌려주는 구조가 중요하다는 점을 경험했습니다.
+
+- 실내 실습 환경 기준으로 개발했으며 실제 공항의 혼잡 환경에서 검증한 시스템은 아닙니다.
+- ArUco 기반 도킹 코드는 [별도 노드](src/perception/perception/docking_node.py)로 남아 있으나 기본 통합 런치에는 포함되어 있지 않습니다. 자동 충전의 전체 연계나 도킹 성공률을 보장하지 않습니다.
+- 저장소에서 확인할 수 없는 정확도·성공률 수치는 기재하지 않았습니다.
