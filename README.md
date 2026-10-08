@@ -3,7 +3,7 @@
 > 목적지 선택부터 도착 안내까지, 웹과 ROS 2를 연결한 실내 길 안내 서비스
 
 <p align="center">
-  <img src="web/flask_server/static/img/ui/공항 안내 로봇 AERO.png" alt="공항 안내 로봇 Aero의 UI 캐릭터" width="380">
+  <img src="web/flask_server/static/img/ui/공항 안내 로봇 AERO.png" alt="공항 안내 로봇 Aero의 UI 캐릭터" width="800">
 </p>
 
 **[실제 로봇 시연 영상](https://youtu.be/HOmyxXTMj24)** · [핵심 코드](#핵심-코드) · [실행 방법](#실행-방법)
